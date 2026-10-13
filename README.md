@@ -10,6 +10,11 @@ VectorCraft, LightCraft, FilmCraft, EffectCraft and the rest) with an AI assista
 - **Chat on Claude Code**: replies come from Claude Code signed in with a Claude subscription
   (each person's own, or one shared by the hub), so you don't need an API key. Claude works on
   the document open in your tab.
+- **A full chat composer**, like Claude Code's: pick the model and effort, show or hide
+  thinking, choose permissions (ask before each change, act without asking, or plan only), attach
+  or paste images, stop a reply, expand each tool call's input and result, see tokens and time per
+  turn, switch between earlier chats, and use slash commands (`/model`, `/effort`, `/mode`,
+  `/clear`, `/compact`, `/help`).
 - **Your own Claude Code too**: the overlay's Connect tab gives each tab its own MCP URL and a
   `claude mcp add` command, so a Claude Code session or a claude.ai connector can drive several
   tabs and apps at once.
@@ -79,7 +84,8 @@ an iPad included.
 | `CHAT_TOKENS` | `personal`, or `both` with a shared token | Whose Claude account chats use (see above). |
 | `CLAUDE_CODE_OAUTH_TOKEN` | | The hub's shared token. |
 | `HUB_SECRET` | derived from `MCP_KEY` | Encrypts personal tokens. Changing it signs every browser's token out. |
-| `CHAT_MODEL`, `CHAT_EFFORT` | Claude Code's | Model and effort for chat. |
+| `CHAT_MODEL`, `CHAT_EFFORT` | Claude Code's | Defaults when the composer leaves them on Default and Auto. |
+| `CHAT_MODELS` | Opus, Sonnet, Haiku 5.5, Fable 5.1 | The composer's model menu, as JSON `[{"value": "<model id>", "label": "<name>"}]`. |
 | `BASIC_AUTH` | | `user:password` pairs, comma separated. |
 | `REQUIRE_SIGN_IN` | `false` | `true` signs people in through craft-mcp's own OpenID Connect client (its `AUTH_*` settings). |
 | `PUBLIC_ORIGIN` | from the request | `https://<host>`, used for the sign-in callback. |
@@ -108,7 +114,7 @@ chat on the hub uses that one plan.
 | `/<app>/_assistant/session` | Mints the tab's relay key (craft-mcp `/mint`) |
 | `/<app>/_storage/…`, `/_storage/…` | craft-mcp cloud storage and its sign-in |
 | `/_relay/…` | craft-mcp: the tab's WebSocket, `/<key>/<app>/mcp` |
-| `/_hub/overlay.js`, `/_hub/chat`, `/_hub/token` | The overlay, its chat, and the person's own token |
+| `/_hub/overlay.js`, `/_hub/chat`, `/_hub/chat/permission`, `/_hub/token` | The overlay, its chat and permission answers, and the person's own token |
 | `/healthz` | Health check |
 
 ## Develop

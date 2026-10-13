@@ -77,10 +77,10 @@
       .grip { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: ew-resize; z-index: 1; }
       .win.float .grip { display: none; }
 
-      header { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 12px; border-bottom: 1px solid #2e2e2e; background: #242424; user-select: none; }
+      header { display: flex; align-items: center; gap: 2px; padding: 6px 6px 6px 12px; border-bottom: 1px solid #2e2e2e; background: #242424; user-select: none; }
       .win.float header { cursor: move; }
       header .name { font-weight: 600; margin-right: 6px; white-space: nowrap; }
-      .tabs { display: flex; gap: 2px; margin-right: auto; }
+      .tabs { display: flex; gap: 2px; margin: 0 auto 0 6px; min-width: 0; overflow: hidden; }
       .tabs button { border: none; background: none; padding: 4px 8px; color: #9a9a9a; border-radius: 5px; }
       .tabs button[aria-selected="true"] { background: #333; color: #eee; }
 
@@ -109,11 +109,50 @@
       .chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 12px; }
       .chips button { border-radius: 999px; font-size: 12px; padding: 5px 10px; color: #cfcfcf; }
 
-      .composer { padding: 10px; border-top: 1px solid #2e2e2e; }
-      .box { display: flex; align-items: flex-end; gap: 6px; border: 1px solid #3a3a3a; border-radius: 10px; background: #181818; padding: 6px 6px 6px 10px; }
-      .box:focus-within { border-color: #4a6f99; }
-      textarea { flex: 1; resize: none; border: none; outline: none; background: none; color: #e3e3e3; max-height: 160px; padding: 4px 0; }
-      .send { border-radius: 8px; padding: 5px 10px; }
+      .composer { position: relative; padding: 10px; border-top: 1px solid #2e2e2e; }
+      .box { display: flex; flex-direction: column; gap: 6px; border: 1px solid #3a3a3a; border-radius: 12px; background: #181818; padding: 8px 8px 6px 10px; }
+      .box:focus-within { border-color: #d97757aa; }
+      .box.drop { border-color: #4aa0f5; background: #1b2430; }
+      textarea { width: 100%; resize: none; border: none; outline: none; background: none; color: #e3e3e3; max-height: 200px; padding: 2px 0; }
+      .bar { display: flex; align-items: center; gap: 6px; }
+      .bar .fill { flex: 1; }
+      .chip { border: 1px solid #343434; background: #232323; color: #cfcfcf; border-radius: 999px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
+      .chip.mode-auto { color: #e6b450; border-color: #4a3f22; }
+      .chip.mode-plan { color: #7fb2ff; border-color: #24364f; }
+      .timer { color: #8a8a8a; font-size: 11px; font-variant-numeric: tabular-nums; }
+      .send.primary { border-radius: 999px; width: 30px; height: 30px; padding: 0; background: #d97757; border-color: #d97757; }
+      .send.primary:hover:not(:disabled) { background: #e58a6c; }
+      .attachments { display: flex; gap: 6px; flex-wrap: wrap; }
+      .att { position: relative; }
+      .att img, .thumbs img { width: 52px; height: 52px; object-fit: cover; border-radius: 6px; border: 1px solid #333; display: block; }
+      .att .x { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; border-radius: 50%; font-size: 12px; line-height: 1; }
+      .thumbs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+      .menu, .slash { position: absolute; z-index: 5; min-width: 220px; max-width: calc(100% - 16px); max-height: 60%; overflow-y: auto; padding: 4px;
+        background: #262626; border: 1px solid #3a3a3a; border-radius: 10px; box-shadow: 0 10px 30px #000a; }
+      .slash { left: 10px; right: 10px; bottom: calc(100% - 4px); max-height: 240px; }
+      .mh { color: #8a8a8a; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px 2px; }
+      .opt { display: block; width: 100%; text-align: left; border: none; background: none; padding: 6px 10px; border-radius: 6px; }
+      .opt:hover { background: #333; } .opt.on { background: #2d3b4d; }
+      .opt.check { display: flex; gap: 8px; align-items: center; cursor: pointer; margin-top: 4px; }
+      .opt code { font-family: ui-monospace, Menlo, Consolas, monospace; color: #e3e3e3; }
+      .opt.check input { flex: none; width: auto; }
+      .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+      .seg { display: flex; gap: 2px; padding: 2px 6px 4px; flex-wrap: wrap; }
+      .seg button { padding: 3px 8px; font-size: 12px; border-radius: 5px; }
+      .seg button.on { background: #2d3b4d; border-color: #3d5c80; }
+      .card { align-self: stretch; border: 1px solid #2f2f2f; border-radius: 8px; background: #1b1b1b; font-size: 12px; }
+      .card summary { cursor: pointer; padding: 5px 9px; color: #a9a9a9; list-style: none; display: flex; gap: 6px; align-items: center; }
+      .card summary::-webkit-details-marker { display: none; }
+      .card summary::before { content: "▸"; color: #666; } .card[open] summary::before { content: "▾"; }
+      .card .sect { color: #777; font-size: 11px; padding: 2px 9px 0; }
+      .card pre { margin: 4px 9px 8px; padding: 6px 8px; background: #141414; border-radius: 6px; overflow: auto; max-height: 220px; white-space: pre-wrap; overflow-wrap: anywhere; }
+      .card pre, .card code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
+      .card.think .md { padding: 0 10px 8px; color: #9a9a9a; font-style: italic; }
+      .card.tool .ico { width: 12px; text-align: center; }
+      .card.perm { padding: 8px 10px; border-color: #5a4628; background: #221d14; }
+      .card.perm pre { margin: 6px 0; }
+      .card.perm .row { margin-top: 6px; }
+      .meta { align-self: flex-end; color: #6f6f6f; font-size: 11px; white-space: pre-wrap; }
       .hint { color: #777; font-size: 11px; margin-top: 6px; display: flex; justify-content: space-between; }
 
       .connect { padding: 14px; overflow-y: auto; }
@@ -135,13 +174,14 @@
     <section class="win" role="dialog" aria-label="AI assistant" hidden>
       <div class="grip" aria-hidden="true"></div>
       <header>
-        <span class="dot"></span><span class="name">AI assistant</span>
+        <span class="dot" title="Connection"></span>
         <div class="tabs" role="tablist">
           <button role="tab" data-tab="chat">Chat</button>
           <button role="tab" data-tab="connect">Connect</button>
           <button role="tab" data-tab="account">Account</button>
         </div>
         <button class="icon" data-act="home" title="All apps">⌂</button>
+        <button class="icon" data-act="history" title="Chats">☰</button>
         <button class="icon" data-act="new" title="New chat">＋</button>
         <button class="icon" data-act="dock" title="Dock to the side">⇥</button>
         <button class="icon" data-act="close" title="Minimize">—</button>
@@ -149,15 +189,26 @@
       <div class="body chat">
         <div class="log" aria-live="polite"></div>
         <div class="composer">
+          <div class="slash" hidden></div>
           <div class="box">
-            <textarea rows="1" placeholder="Ask ${title} AI to do something…" aria-label="Message"></textarea>
-            <button class="primary send" title="Send">↑</button>
+            <div class="attachments" hidden></div>
+            <textarea rows="1" placeholder="Ask ${title} AI to do something… (/ for commands)" aria-label="Message"></textarea>
+            <div class="bar">
+              <button class="icon" data-act="attach" title="Attach images">＋</button>
+              <input type="file" accept="image/*" multiple hidden>
+              <button class="chip" data-menu="model" title="Model and effort"></button>
+              <span class="timer"></span>
+              <span class="fill"></span>
+              <button class="chip" data-menu="permission" title="Permissions"></button>
+              <button class="primary send" title="Send">↑</button>
+            </div>
           </div>
           <div class="hint"><span>Enter to send · Shift+Enter for a new line</span><span class="status"></span></div>
         </div>
       </div>
       <div class="body connect" hidden></div>
       <div class="body account connect" hidden></div>
+      <div class="menu" role="menu" hidden></div>
     </section>`;
   const $ = (s) => root.querySelector(s);
   const fab = $(".fab");
@@ -195,6 +246,7 @@
     accountView.hidden = ui.tab !== "account";
     $('[data-tab="account"]').hidden = !hub.chat || hub.tokens === "shared";
     $('[data-act="new"]').hidden = ui.tab !== "chat";
+    $('[data-act="history"]').hidden = ui.tab !== "chat";
     // The app sizes its canvas from the window; tell it the space changed.
     relayout = true;
     dispatchEvent(new Event("resize"));
@@ -292,6 +344,7 @@
         if (!lines.length) continue;
         if (lines.every((l) => /^\s*[-*] /.test(l))) out.push(`<ul>${lines.map((l) => `<li>${inline(l.replace(/^\s*[-*] /, ""))}</li>`).join("")}</ul>`);
         else if (lines.every((l) => /^\s*\d+\. /.test(l))) out.push(`<ol>${lines.map((l) => `<li>${inline(l.replace(/^\s*\d+\. /, ""))}</li>`).join("")}</ol>`);
+        else if (lines.length === 1 && /^#{1,4} /.test(lines[0])) out.push(`<p><strong>${inline(lines[0].replace(/^#+ /, ""))}</strong></p>`);
         else out.push(`<p>${lines.map(inline).join("<br>")}</p>`);
       }
     });
@@ -306,60 +359,286 @@
     effectcraft: ["Describe the composition", "Add a fade-in to the first layer", "List the layers"],
   }[app] ?? ["What can you do here?"];
 
-  // Display transcript: [{role:"user"|"assistant"|"tool"|"error", text}]. The model's own history lives in craft-mcp.
-  let chat = load(CHAT_STORE);
-  if (!chat?.id) chat = { id: crypto.randomUUID(), items: [] };
-  let running = null;
+  // Settings for the next message, like Claude Code's composer: model, effort, thinking, permission mode.
+  const MODELS = hub.models ?? [{ value: "", label: "Default" }];
+  const EFFORTS = hub.efforts ?? [];
+  const MODES = {
+    ask: ["Ask before acting", "Claude asks before each change to the document."],
+    auto: ["Act without asking", "Claude makes changes straight away."],
+    plan: ["Plan mode", "Claude only looks, and proposes a plan of changes."],
+  };
+  const cfg = Object.assign({ model: "", effort: "", permission: "ask", thinking: true }, load("craftHubChatCfg"));
+  const saveCfg = () => { keep("craftHubChatCfg", cfg); renderBar(); };
 
-  function renderLog() {
+  // Chats in this browser, newest first: [{ id, title, updated, items }]. Items:
+  //   user {text, images: n, thumbs?}  assistant {text}  thinking {text, open}
+  //   tool {id, name, input, result, isError, done, open}  permission {id, name, input, answer}
+  //   meta {text}  error {text}
+  const CHATS_STORE = `craftHubChats:${app}`;
+  let chats = load(CHATS_STORE) ?? [];
+  const legacy = load(CHAT_STORE);
+  if (legacy?.items?.length && !chats.some((c) => c.id === legacy.id)) chats.unshift({ id: legacy.id, title: legacy.items.find((i) => i.role === "user")?.text ?? "Chat", updated: Date.now(), items: legacy.items });
+  keep(CHAT_STORE, null);
+  let chat = chats[0]?.items.length ? chats[0] : { id: crypto.randomUUID(), title: "", updated: Date.now(), items: [] };
+  let running = null;
+  let started = 0;
+  let pending = []; // images attached to the next message: { media_type, data, url }
+
+  const persistChats = () => {
+    chat.updated = Date.now();
+    chats = [chat, ...chats.filter((c) => c.id !== chat.id)].filter((c) => c.items.length).slice(0, 30);
+    // Image data stays out of storage; the transcript keeps a count.
+    keep(CHATS_STORE, chats.map((c) => ({ ...c, items: c.items.slice(-300).map(({ thumbs, ...i }) => i) })));
+  };
+
+  const short = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
+  const pretty = (v) => { try { return JSON.stringify(v, null, 2); } catch { return String(v); } };
+  const label = (value) => MODELS.find((m) => m.value === value)?.label ?? (value || "Default");
+  const cap = (s) => s[0].toUpperCase() + s.slice(1);
+
+  let frame = 0;
+  const renderLog = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; drawLog(); }); };
+  function drawLog() {
     if (!chat.items.length && !running) {
       log.innerHTML = `<div class="empty"><div class="spark">✦</div><h3>What should we do in ${esc(title)}?</h3>
-        <div>The assistant works on what's open in this tab.</div>
+        <div>The assistant works on what's open in this tab. Paste or drop images to show it something.</div>
         <div class="chips">${SUGGEST.map((s) => `<button>${esc(s)}</button>`).join("")}</div></div>`;
       for (const b of log.querySelectorAll(".chips button")) b.onclick = () => send(b.textContent);
       return;
     }
-    log.innerHTML = chat.items.map((m) =>
-      m.role === "user" ? `<div class="msg user">${esc(m.text)}</div>`
-      : m.role === "tool" ? `<div class="tool">⚙ <code>${esc(m.text)}</code></div>`
-      : m.role === "error" ? `<div class="msg err">${esc(m.text)}</div>`
-      : `<div class="msg assistant">${markdown(m.text)}</div>`).join("")
-      + (running ? `<div class="busy"><i></i><i></i><i></i></div>` : "");
-    log.scrollTop = log.scrollHeight;
+    const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+    log.innerHTML = chat.items.map((m, i) => {
+      switch (m.role) {
+        case "user":
+          return `<div class="msg user">${m.thumbs?.length ? `<div class="thumbs">${m.thumbs.map((u) => `<img src="${u}" alt="">`).join("")}</div>`
+            : m.images ? `<div class="muted">🖼 ${m.images} image${m.images > 1 ? "s" : ""}</div>` : ""}${esc(m.text)}</div>`;
+        case "thinking":
+          return `<details class="card think" data-i="${i}"${m.open ? " open" : ""}><summary>Thinking</summary><div class="md">${markdown(m.text)}</div></details>`;
+        case "tool":
+          return `<details class="card tool" data-i="${i}"${m.open ? " open" : ""}><summary><span class="ico">${m.done ? (m.isError ? "✕" : "✓") : "…"}</span><code>${esc(m.name)}</code></summary>
+            <div class="sect">Input</div><pre>${esc(pretty(m.input))}</pre>${m.done ? `<div class="sect">Result</div><pre class="${m.isError ? "err" : ""}">${esc(m.result || "(empty)")}</pre>` : ""}</details>`;
+        case "permission":
+          return `<div class="card perm" data-i="${i}"><div><strong>Allow <code>${esc(m.name)}</code>?</strong></div>
+            <pre>${esc(pretty(m.input))}</pre>
+            ${m.answer ? `<div class="muted">${{ allow: "Allowed", always: "Allowed for this chat", deny: "Declined" }[m.answer]}</div>`
+              : `<div class="row"><button class="primary" data-answer="allow">Allow</button><button data-answer="always">Always allow</button><button data-answer="deny">Deny</button></div>`}</div>`;
+        case "meta":
+          return `<div class="meta">${esc(m.text)}</div>`;
+        case "error":
+          return `<div class="msg err">${esc(m.text)}</div>`;
+        default:
+          return `<div class="msg assistant md">${markdown(m.text)}</div>`;
+      }
+    }).join("") + (running ? `<div class="busy"><i></i><i></i><i></i></div>` : "");
+    if (stick) log.scrollTop = log.scrollHeight;
   }
-  const persistChat = () => keep(CHAT_STORE, { ...chat, items: chat.items.slice(-200) });
+  // Keep cards open or closed across redraws.
+  log.addEventListener("toggle", (e) => { const m = chat.items[e.target.dataset?.i]; if (m) m.open = e.target.open; }, true);
+  log.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-answer]");
+    if (!b) return;
+    const m = chat.items[b.closest("[data-i]").dataset.i];
+    m.answer = b.dataset.answer;
+    renderLog();
+    fetch("/_hub/chat/permission", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ app, chat: chat.id, mcp: A?.session?.mcp, id: m.id, allow: m.answer !== "deny", always: m.answer === "always" }),
+    }).catch(() => {});
+  });
+
+  // ---- composer bar: model and effort, permission mode, attachments, timer
+  function renderBar() {
+    $('[data-menu="model"]').textContent = `${label(cfg.model)}${cfg.effort ? ` · ${cap(cfg.effort)}` : ""}`;
+    $('[data-menu="permission"]').textContent = MODES[cfg.permission][0];
+    $('[data-menu="permission"]').className = `chip mode-${cfg.permission}`;
+    $(".attachments").innerHTML = pending.map((p, i) => `<span class="att"><img src="${p.url}" alt=""><button class="x" data-drop="${i}" title="Remove">×</button></span>`).join("");
+    $(".attachments").hidden = !pending.length;
+    sendBtn.textContent = running ? "■" : "↑";
+    sendBtn.title = running ? "Stop" : "Send";
+  }
+  $(".attachments").addEventListener("click", (e) => {
+    const i = e.target.dataset.drop;
+    if (i !== undefined) { pending.splice(Number(i), 1); renderBar(); }
+  });
+
+  const menu = $(".menu");
+  const closeMenu = () => { menu.hidden = true; };
+  // Opens above the anchor (composer chips), or below it (header buttons).
+  function openMenu(anchor, html, wire, below = false) {
+    menu.innerHTML = html;
+    menu.hidden = false;
+    const box = anchor.getBoundingClientRect();
+    const frame = $(".win").getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(box.left - frame.left, frame.width - menu.offsetWidth - 8))}px`;
+    menu.style.top = below ? `${box.bottom - frame.top + 6}px` : "auto";
+    menu.style.bottom = below ? "auto" : `${frame.bottom - box.top + 6}px`;
+    wire(menu);
+  }
+  root.addEventListener("pointerdown", (e) => {
+    if (!menu.hidden && !e.composedPath().some((n) => n === menu || n?.dataset?.menu)) closeMenu();
+  });
+  $('[data-menu="model"]').onclick = (e) => {
+    if (!menu.hidden) return closeMenu();
+    openMenu(e.currentTarget, `
+      <div class="mh">Model</div>
+      ${MODELS.map((m) => `<button class="opt${m.value === cfg.model ? " on" : ""}" data-model="${esc(m.value)}">${esc(m.label)}</button>`).join("")}
+      ${EFFORTS.length ? `<div class="mh">Effort</div><div class="seg">
+        <button class="${cfg.effort ? "" : "on"}" data-effort="">Auto</button>
+        ${EFFORTS.map((x) => `<button class="${x === cfg.effort ? "on" : ""}" data-effort="${x}">${cap(x)}</button>`).join("")}</div>` : ""}
+      <label class="opt check"><input type="checkbox" ${cfg.thinking ? "checked" : ""} data-thinking> Show thinking</label>`, (m) => {
+      for (const b of m.querySelectorAll("[data-model]")) b.onclick = () => { cfg.model = b.dataset.model; saveCfg(); closeMenu(); };
+      for (const b of m.querySelectorAll("[data-effort]")) b.onclick = () => { cfg.effort = b.dataset.effort; saveCfg(); closeMenu(); };
+      m.querySelector("[data-thinking]").onchange = (x) => { cfg.thinking = x.target.checked; saveCfg(); };
+    });
+  };
+  $('[data-menu="permission"]').onclick = (e) => {
+    if (!menu.hidden) return closeMenu();
+    openMenu(e.currentTarget, `<div class="mh">Permissions</div>${Object.entries(MODES).map(([k, [name, desc]]) =>
+      `<button class="opt${k === cfg.permission ? " on" : ""}" data-mode="${k}"><div>${name}</div><div class="muted">${desc}</div></button>`).join("")}`, (m) => {
+      for (const b of m.querySelectorAll("[data-mode]")) b.onclick = () => { cfg.permission = b.dataset.mode; saveCfg(); closeMenu(); };
+    });
+  };
+  $('[data-act="history"]').onclick = (e) => {
+    if (!menu.hidden) return closeMenu();
+    const list = [chat, ...chats.filter((c) => c.id !== chat.id)].filter((c) => c.items.length);
+    openMenu(e.currentTarget, `<div class="mh">Chats</div><button class="opt" data-chat="">＋ New chat</button>
+      ${list.map((c) => `<button class="opt${c.id === chat.id ? " on" : ""}" data-chat="${c.id}"><div class="ellipsis">${esc(c.title || "Chat")}</div>
+        <div class="muted">${new Date(c.updated).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</div></button>`).join("") || `<div class="muted" style="padding:6px 10px">No earlier chats.</div>`}`, (m) => {
+      for (const b of m.querySelectorAll("[data-chat]")) b.onclick = () => {
+        closeMenu();
+        if (!b.dataset.chat) return newChat();
+        if (running) return;
+        chat = chats.find((c) => c.id === b.dataset.chat) ?? chat;
+        renderLog();
+      };
+    }, true);
+  };
+  const fileInput = $('input[type="file"]');
+  $('[data-act="attach"]').onclick = () => fileInput.click();
+  fileInput.onchange = () => { addImages([...fileInput.files]); fileInput.value = ""; };
+
+  // Images go to Claude as base64; big ones are scaled down to 1600 px first.
+  async function addImages(files) {
+    for (const f of files.filter((x) => x.type.startsWith("image/")).slice(0, 8 - pending.length)) {
+      const url = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
+      const img = await new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = url; });
+      let out = url;
+      if (img && (Math.max(img.width, img.height) > 1600 || f.size > 3 << 20)) {
+        const k = 1600 / Math.max(img.width, img.height, 1600);
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * k);
+        c.height = Math.round(img.height * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        out = c.toDataURL("image/jpeg", 0.88);
+      }
+      const [, media_type, data] = /^data:([^;]+);base64,(.*)$/.exec(out) ?? [];
+      if (data) pending.push({ media_type, data, url: out });
+    }
+    renderBar();
+  }
+  input.addEventListener("paste", (e) => {
+    const files = [...(e.clipboardData?.files ?? [])];
+    if (files.some((f) => f.type.startsWith("image/"))) { e.preventDefault(); addImages(files); }
+  });
+  const box = $(".box");
+  box.addEventListener("dragover", (e) => { e.preventDefault(); box.classList.add("drop"); });
+  box.addEventListener("dragleave", () => box.classList.remove("drop"));
+  box.addEventListener("drop", (e) => { e.preventDefault(); box.classList.remove("drop"); addImages([...(e.dataTransfer?.files ?? [])]); });
+
+  let tick = 0;
   const setRunning = (r) => {
     running = r;
-    sendBtn.textContent = r ? "■" : "↑";
-    sendBtn.title = r ? "Stop" : "Send";
+    clearInterval(tick);
+    const timer = $(".timer");
+    if (r) {
+      started = Date.now();
+      tick = setInterval(() => { timer.textContent = `${Math.round((Date.now() - started) / 1000)}s`; }, 500);
+    }
+    timer.textContent = "";
+    renderBar();
     renderLog();
   };
 
   async function newChat() {
     running?.abort();
     const old = chat.id;
-    chat = { id: crypto.randomUUID(), items: [] };
-    persistChat();
+    if (chat.items.length) persistChats();
+    chat = { id: crypto.randomUUID(), title: "", updated: Date.now(), items: [] };
     renderLog();
-    if (A?.session) fetch("/_hub/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ app, chat: old, mcp: A?.session?.mcp, reset: true }) }).catch(() => {});
+    if (A?.session) fetch("/_hub/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ app, chat: old, mcp: A.session.mcp, reset: true }) }).catch(() => {});
     input.focus();
+  }
+
+  // Slash commands handled here; any other /command goes to Claude Code (e.g. /compact).
+  const COMMANDS = [
+    ["/clear", "Start a new chat"],
+    ["/model", "Set the model: " + MODELS.map((m) => m.label.toLowerCase().replace(/\s+/g, "")).join(", ")],
+    ["/effort", "Set the effort: auto, " + EFFORTS.join(", ")],
+    ["/mode", "Permissions: ask, auto, plan"],
+    ["/thinking", "Show or hide thinking: on, off"],
+    ["/compact", "Summarize the chat so far to free up context"],
+    ["/help", "List these commands"],
+  ];
+  function command(text) {
+    const [cmd, ...rest] = text.split(/\s+/);
+    const arg = rest.join(" ").toLowerCase();
+    const note = (t) => { chat.items.push({ role: "meta", text: t }); renderLog(); };
+    switch (cmd) {
+      case "/clear": case "/new": newChat(); return true;
+      case "/model": {
+        const m = MODELS.find((x) => x.label.toLowerCase().replace(/\s+/g, "") === arg.replace(/\s+/g, "") || x.value === arg || (arg && x.label.toLowerCase().startsWith(arg)));
+        if (!m) { note(`Models: ${MODELS.map((x) => x.label).join(", ")}`); return true; }
+        cfg.model = m.value; saveCfg(); note(`Model: ${m.label}`); return true;
+      }
+      case "/effort":
+        if (arg !== "auto" && !EFFORTS.includes(arg)) { note(`Effort: auto, ${EFFORTS.join(", ")}`); return true; }
+        cfg.effort = arg === "auto" ? "" : arg; saveCfg(); note(`Effort: ${cap(arg)}`); return true;
+      case "/mode": case "/permissions":
+        if (!MODES[arg]) { note("Modes: ask, auto, plan"); return true; }
+        cfg.permission = arg; saveCfg(); note(MODES[arg][0]); return true;
+      case "/thinking":
+        cfg.thinking = arg ? arg !== "off" : !cfg.thinking; saveCfg(); note(`Thinking ${cfg.thinking ? "shown" : "hidden"}`); return true;
+      case "/help":
+        note(COMMANDS.map(([c, d]) => `${c}  ${d}`).join("\n")); return true;
+      default: return false;
+    }
+  }
+  const slash = $(".slash");
+  function renderSlash() {
+    const v = input.value;
+    const show = /^\/\S*$/.test(v);
+    const list = show ? COMMANDS.filter(([c]) => c.startsWith(v)) : [];
+    slash.hidden = !list.length;
+    slash.innerHTML = list.map(([c, d]) => `<button class="opt" data-cmd="${c}"><code>${c}</code> <span class="muted">${esc(d)}</span></button>`).join("");
+    for (const b of slash.querySelectorAll("[data-cmd]")) b.onclick = () => { input.value = `${b.dataset.cmd} `; input.focus(); renderSlash(); };
   }
 
   async function send(text) {
     text = text.trim();
-    if (!text || running) return;
+    if ((!text && !pending.length) || running) return;
     input.value = "";
     grow();
-    chat.items.push({ role: "user", text });
+    renderSlash();
+    if (text.startsWith("/") && !pending.length && command(text)) return;
+    const images = pending;
+    pending = [];
+    chat.items.push({ role: "user", text, images: images.length, thumbs: images.map((p) => p.url) });
+    if (!chat.title) chat.title = text.slice(0, 80) || "Images";
     const controller = new AbortController();
     setRunning(controller);
+    const tools = new Map();
     try {
       if (!hub.chat) throw new Error("chat is off on this hub; use the Connect tab with Claude or Claude Code");
       await connected();
       const r = await fetch("/_hub/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ app, chat: chat.id, text, mcp: A.session.mcp }),
+        body: JSON.stringify({
+          app, chat: chat.id, text, mcp: A.session.mcp,
+          images: images.map(({ media_type, data }) => ({ media_type, data })),
+          model: cfg.model, effort: cfg.effort, permission: cfg.permission, thinking: cfg.thinking,
+        }),
         signal: controller.signal,
       });
       if (!r.ok) {
@@ -380,33 +659,53 @@
           buf = buf.slice(nl + 1);
           let ev;
           try { ev = JSON.parse(line); } catch { continue; }
-          if (ev.type === "text") {
-            if (!current) chat.items.push((current = { role: "assistant", text: "" }));
+          if (ev.type === "text" || ev.type === "thinking") {
+            const role = ev.type === "text" ? "assistant" : "thinking";
+            if (current?.role !== role) chat.items.push((current = { role, text: "" }));
             current.text += ev.text;
           } else if (ev.type === "tool") {
             current = null;
-            chat.items.push({ role: "tool", text: ev.name });
+            const m = { role: "tool", id: ev.id, name: ev.name, input: ev.input };
+            tools.set(ev.id, m);
+            chat.items.push(m);
+          } else if (ev.type === "tool_result") {
+            const m = tools.get(ev.id);
+            if (m) Object.assign(m, { result: ev.text, isError: ev.isError, done: true });
+          } else if (ev.type === "permission") {
+            current = null;
+            chat.items.push({ role: "permission", id: ev.id, name: ev.name, input: ev.input });
+            if (ui.mode === "closed") setMode(ui.lastMode ?? "float");
           } else if (ev.type === "error") {
+            current = null;
             chat.items.push({ role: "error", text: ev.error });
+          } else if (ev.type === "done") {
+            const known = MODELS.find((m) => m.value && ev.model?.startsWith(m.value));
+            const parts = [known ? known.label : ev.model?.replace(/^claude-/, ""),
+              ev.usage && `${short(ev.usage.input)} in · ${short(ev.usage.output)} out`, `${(ev.ms / 1000).toFixed(1)}s`].filter(Boolean);
+            chat.items.push({ role: "meta", text: parts.join(" · ") });
           }
           renderLog();
         }
       }
     } catch (e) {
       if (e.name !== "AbortError") chat.items.push({ role: "error", text: `Couldn't reach the assistant: ${e.message}` });
+      else chat.items.push({ role: "meta", text: "Stopped" });
     } finally {
-      persistChat();
+      for (const m of chat.items) if (m.role === "permission" && !m.answer) m.answer = "deny";
+      persistChats();
       setRunning(null);
     }
   }
 
-  const grow = () => { input.style.height = "auto"; input.style.height = `${Math.min(input.scrollHeight, 160)}px`; };
-  input.addEventListener("input", grow);
+  const grow = () => { input.style.height = "auto"; input.style.height = `${Math.min(input.scrollHeight, 200)}px`; };
+  input.addEventListener("input", () => { grow(); renderSlash(); });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); }
-    if (e.key === "Escape") $('[data-act="close"]').click();
+    if (e.key === "Escape") { if (running) running.abort(); else if (!menu.hidden) closeMenu(); else $('[data-act="close"]').click(); }
+    if (e.key === "Tab" && !slash.hidden) { e.preventDefault(); slash.querySelector("[data-cmd]")?.click(); }
   });
   sendBtn.onclick = () => (running ? running.abort() : send(input.value));
+  renderBar();
 
   // ---- account (whose Claude plan chats run on) -------------------------------------------
   async function renderAccount(message = "") {

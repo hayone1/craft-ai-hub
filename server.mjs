@@ -25,7 +25,7 @@ import { readFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import zlib from "node:zlib";
-import { handleChat } from "./chat.mjs";
+import { EFFORTS, MODELS, answerPermission, handleChat } from "./chat.mjs";
 
 const CATALOG = {
   photocraft: ["PhotoCraft", "Image editing, Photoshop-style"],
@@ -145,7 +145,7 @@ function injectInto(app) {
     body.on("data", (c) => chunks.push(c));
     body.on("error", () => res.headersSent || res.writeHead(502).end());
     body.on("end", () => {
-      const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled, tokens: TOKENS }).replace(/</g, "\\u003c");
+      const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled, tokens: TOKENS, models: MODELS, efforts: EFFORTS }).replace(/</g, "\\u003c");
       const html = Buffer.concat(chunks).toString("utf8")
         .replace(/<head(\s[^>]*)?>/i, (m) => `${m}<script>window.craftHub=${settings}</script>`)
         .replace(/<\/head>/i, '<script src="/_hub/overlay.js" defer></script></head>');
@@ -226,11 +226,12 @@ const launcher = () => `<!doctype html>
 </main></body></html>`;
 
 // ---- server -----------------------------------------------------------------------------------
-const readJson = async (req) => {
+// Chat messages carry pasted images, so allow up to 32 MB.
+const readJson = async (req, limit = 32 << 20) => {
   let body = "";
   for await (const chunk of req) {
     body += chunk;
-    if (body.length > 1 << 20) throw new Error("too large");
+    if (body.length > limit) throw new Error("too large");
   }
   return JSON.parse(body || "{}");
 };
@@ -262,7 +263,7 @@ const server = createServer(async (req, res) => {
       if (!/^[\w.-]{20,500}$/.test(token)) return json(res, 400, { error: "That doesn't look like a token from claude setup-token." });
       return res.writeHead(204, { "set-cookie": tokenCookie(req, sealToken(token), 365 * 86400) }).end();
     }
-    if (path === "/_hub/chat") {
+    if (path === "/_hub/chat" || path === "/_hub/chat/permission") {
       if (req.method !== "POST") return res.writeHead(405).end();
       if (!(await isSignedIn(req))) return json(res, 401, { error: "Sign in first." });
       if (!chatEnabled) return json(res, 503, { error: "Chat is not set up on this hub." });
@@ -272,6 +273,7 @@ const server = createServer(async (req, res) => {
       // The tab's public MCP URL (.../<key>/<app>/mcp) on the relay's internal address.
       const m = /\/([^/]+)\/([a-z0-9-]+)\/mcp$/.exec(String(body.mcp ?? ""));
       if (!m || m[2] !== app.name || !validKey(m[1])) return json(res, 403, { error: "This tab's assistant connection is not valid; reconnect it." });
+      if (path === "/_hub/chat/permission") return answerPermission(res, body, { app: app.name, key: m[1] });
       const mcpUrl = relayUrl(`/${m[1]}/${m[2]}/mcp`).href;
       const token = personalToken(req) || (TOKENS === "personal" ? "" : SHARED_TOKEN);
       if (!token && !body.reset) return json(res, 401, { error: "Add your Claude account to chat.", needToken: true });
