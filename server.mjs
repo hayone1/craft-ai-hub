@@ -13,17 +13,19 @@
 // Environment (see README.md):
 //   APPS                     photocraft=http://photocraft:8080,vectorcraft=http://localhost:8082,...
 //   RELAY_URL, MCP_KEY       craft-mcp's internal URL and its MCP_KEY (optional: no assistant)
-//   CLAUDE_CODE_OAUTH_TOKEN  from `claude setup-token`; enables chat (CHAT_MODEL, CHAT_EFFORT optional)
+//   CLAUDE_CODE_OAUTH_TOKEN  a shared token from `claude setup-token` (CHAT_MODEL, CHAT_EFFORT optional)
+//   CHAT_TOKENS              personal | shared | both | off: whose Claude account chats run on
+//   HUB_SECRET               encrypts personal tokens in their cookie (default: derived from MCP_KEY)
 //   BASIC_AUTH               user:password[,user:password...]
 //   REQUIRE_SIGN_IN          "true": craft-mcp's OpenID Connect sign-in
 //   PUBLIC_ORIGIN            https://<this host>, when the forwarded headers don't say it
 //   PORT                     default 8080
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import zlib from "node:zlib";
-import { chatEnabled, handleChat } from "./chat.mjs";
+import { handleChat } from "./chat.mjs";
 
 const CATALOG = {
   photocraft: ["PhotoCraft", "Image editing, Photoshop-style"],
@@ -60,6 +62,38 @@ const USERS = (process.env.BASIC_AUTH ?? "").split(",").map((s) => s.trim()).fil
 });
 const origin = (req) => process.env.PUBLIC_ORIGIN?.replace(/\/$/, "")
   || `${String(req.headers["x-forwarded-proto"] ?? "http").split(",")[0]}://${String(req.headers["x-forwarded-host"] ?? req.headers.host).split(",")[0]}`;
+// Chat runs on a Claude subscription token: each person's own (kept encrypted in an HttpOnly cookie
+// on /_hub, so neither the apps' scripts nor the server's disk hold it), the hub's shared one, or
+// either (the person's own first).
+const SHARED_TOKEN = process.env.CLAUDE_CODE_OAUTH_TOKEN ?? "";
+const TOKENS = process.env.CHAT_TOKENS || (SHARED_TOKEN ? "both" : "personal");
+if (!["personal", "shared", "both", "off"].includes(TOKENS)) throw new Error("CHAT_TOKENS: personal, shared, both or off");
+if (TOKENS === "shared" && !SHARED_TOKEN) throw new Error("CHAT_TOKENS=shared needs CLAUDE_CODE_OAUTH_TOKEN");
+const chatEnabled = Boolean(process.env.RELAY_URL) && TOKENS !== "off";
+const TOKEN_KEY = createHash("sha256").update(`craft-ai-hub/token/${process.env.HUB_SECRET || process.env.MCP_KEY || randomBytes(32).toString("hex")}`).digest();
+const sealToken = (token) => {
+  const iv = randomBytes(12);
+  const c = createCipheriv("aes-256-gcm", TOKEN_KEY, iv);
+  const body = Buffer.concat([c.update(token, "utf8"), c.final()]);
+  return Buffer.concat([iv, c.getAuthTag(), body]).toString("base64url");
+};
+const openToken = (sealed) => {
+  try {
+    const raw = Buffer.from(sealed, "base64url");
+    const d = createDecipheriv("aes-256-gcm", TOKEN_KEY, raw.subarray(0, 12));
+    d.setAuthTag(raw.subarray(12, 28));
+    return Buffer.concat([d.update(raw.subarray(28)), d.final()]).toString("utf8");
+  } catch { return ""; }
+};
+const TOKEN_COOKIE = "craft_hub_token";
+const personalToken = (req) => {
+  if (TOKENS === "shared") return "";
+  const m = new RegExp(`(?:^|;\\s*)${TOKEN_COOKIE}=([^;]+)`).exec(req.headers.cookie ?? "");
+  return m ? openToken(m[1]) : "";
+};
+const tokenCookie = (req, value, maxAge) =>
+  `${TOKEN_COOKIE}=${value}; Path=/_hub; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${origin(req).startsWith("https:") ? "; Secure" : ""}`;
+
 const OVERLAY = readFileSync(new URL("./public/overlay.js", import.meta.url));
 
 // A relay key (<expiry>.<nonce>.<signature>, signed with MCP_KEY by craft-mcp) that is still valid:
@@ -111,7 +145,7 @@ function injectInto(app) {
     body.on("data", (c) => chunks.push(c));
     body.on("error", () => res.headersSent || res.writeHead(502).end());
     body.on("end", () => {
-      const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled && Boolean(RELAY) }).replace(/</g, "\\u003c");
+      const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled, tokens: TOKENS }).replace(/</g, "\\u003c");
       const html = Buffer.concat(chunks).toString("utf8")
         .replace(/<head(\s[^>]*)?>/i, (m) => `${m}<script>window.craftHub=${settings}</script>`)
         .replace(/<\/head>/i, '<script src="/_hub/overlay.js" defer></script></head>');
@@ -188,7 +222,7 @@ const launcher = () => `<!doctype html>
     <a class="card" href="/${esc(a.name)}/"><span class="icon" style="background:hsl(${(i * 47 + 200) % 360} 55% 42%)">${esc(a.title[0])}</span>
       <span><div class="name">${esc(a.title)}</div><div class="desc">${esc(a.description)}</div></span></a>`).join("")}
   </div>
-  ${RELAY ? `<p class="note"><span class="spark">✦</span> Inside an app, the Ask AI button opens the assistant${chatEnabled ? "" : " (connect AI apps over MCP; in-app chat is not set up)"}.</p>` : ""}
+  ${RELAY ? `<p class="note"><span class="spark">✦</span> Inside an app, the Ask AI button opens the assistant${chatEnabled ? "" : " (connect AI apps over MCP; in-app chat is off)"}.</p>` : ""}
 </main></body></html>`;
 
 // ---- server -----------------------------------------------------------------------------------
@@ -218,10 +252,20 @@ const server = createServer(async (req, res) => {
       if (!RELAY) return res.writeHead(404).end();
       return storage(req, res, [...APPS.keys()][0], path.slice("/_storage/".length), url.search);
     }
+    if (path === "/_hub/token") {
+      if (!(await isSignedIn(req))) return json(res, 401, { error: "Sign in first." });
+      if (req.method === "GET") return json(res, 200, { tokens: TOKENS, personal: Boolean(personalToken(req)), shared: Boolean(SHARED_TOKEN) && TOKENS !== "personal" });
+      if (TOKENS === "shared" || TOKENS === "off") return res.writeHead(404).end();
+      if (req.method === "DELETE") return res.writeHead(204, { "set-cookie": tokenCookie(req, "", 0) }).end();
+      if (req.method !== "POST") return res.writeHead(405).end();
+      const token = String((await readJson(req)).token ?? "").trim();
+      if (!/^[\w.-]{20,500}$/.test(token)) return json(res, 400, { error: "That doesn't look like a token from claude setup-token." });
+      return res.writeHead(204, { "set-cookie": tokenCookie(req, sealToken(token), 365 * 86400) }).end();
+    }
     if (path === "/_hub/chat") {
       if (req.method !== "POST") return res.writeHead(405).end();
       if (!(await isSignedIn(req))) return json(res, 401, { error: "Sign in first." });
-      if (!chatEnabled || !RELAY) return json(res, 503, { error: "Chat is not set up on this hub: it needs a Claude Code token (claude setup-token)." });
+      if (!chatEnabled) return json(res, 503, { error: "Chat is not set up on this hub." });
       const body = await readJson(req);
       const app = APPS.get(body.app);
       if (!app || typeof body.chat !== "string" || body.chat.length > 64) return res.writeHead(400).end();
@@ -229,7 +273,9 @@ const server = createServer(async (req, res) => {
       const m = /\/([^/]+)\/([a-z0-9-]+)\/mcp$/.exec(String(body.mcp ?? ""));
       if (!m || m[2] !== app.name || !validKey(m[1])) return json(res, 403, { error: "This tab's assistant connection is not valid; reconnect it." });
       const mcpUrl = relayUrl(`/${m[1]}/${m[2]}/mcp`).href;
-      return handleChat(res, body, { app: app.name, title: app.title, description: app.description, key: m[1], mcpUrl });
+      const token = personalToken(req) || (TOKENS === "personal" ? "" : SHARED_TOKEN);
+      if (!token && !body.reset) return json(res, 401, { error: "Add your Claude account to chat.", needToken: true });
+      return handleChat(res, body, { app: app.name, title: app.title, description: app.description, key: m[1], mcpUrl, token });
     }
     if (path === "/") {
       if (!(await isSignedIn(req))) return signInPage(res);
@@ -288,5 +334,5 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 server.listen(Number(process.env.PORT) || 8080, () => {
-  console.log(`craft-ai-hub: ${[...APPS.keys()].join(", ")}; relay ${RELAY ? RELAY.href : "off"}; chat ${chatEnabled && RELAY ? "on" : "off"}`);
+  console.log(`craft-ai-hub: ${[...APPS.keys()].join(", ")}; relay ${RELAY ? RELAY.href : "off"}; chat ${chatEnabled ? `on (${TOKENS} tokens)` : "off"}`);
 });

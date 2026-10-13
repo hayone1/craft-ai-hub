@@ -1,0 +1,104 @@
+# craft-ai-hub and craft-mcp on Kubernetes, with an Ingress for one host. The apps run wherever
+# you like (here: in-cluster Deployments of the :remote images); list them in APPS by URL.
+#   kubectl create namespace craft
+#   kubectl -n craft create secret generic craft-ai-hub \
+#     --from-literal=MCP_KEY=$(openssl rand -hex 24) --from-literal=BASIC_AUTH=me:change-me
+#   kubectl -n craft apply -f craft-ai-hub.yaml     # after changing craft.example.org below
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: craft-ai-hub
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: craft-ai-hub } }
+  template:
+    metadata: { labels: { app: craft-ai-hub } }
+    spec:
+      containers:
+        - name: hub
+          image: hayone/craft-ai-hub:latest
+          envFrom: [{ secretRef: { name: craft-ai-hub } }]
+          env:
+            - { name: APPS, value: "photocraft=http://photocraft:8080,vectorcraft=http://vectorcraft:8080" }
+            - { name: RELAY_URL, value: "http://craft-mcp:8080" }
+            - { name: PUBLIC_ORIGIN, value: "https://craft.example.org" }
+            - { name: CHAT_TOKENS, value: "personal" }
+          ports: [{ containerPort: 8080 }]
+          readinessProbe: { httpGet: { path: /healthz, port: 8080 } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: craft-ai-hub }
+spec:
+  selector: { app: craft-ai-hub }
+  ports: [{ port: 8080 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: craft-mcp
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: craft-mcp } }
+  template:
+    metadata: { labels: { app: craft-mcp } }
+    spec:
+      containers:
+        - name: relay
+          image: hayone/craft-mcp:latest
+          env:
+            - { name: MCP_KEY, valueFrom: { secretKeyRef: { name: craft-ai-hub, key: MCP_KEY } } }
+            - { name: PUBLIC_HOST, value: "https://craft.example.org/_relay" }
+          ports: [{ containerPort: 8080 }]
+          readinessProbe: { httpGet: { path: /healthz, port: 8080 } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: craft-mcp }
+spec:
+  selector: { app: craft-mcp }
+  ports: [{ port: 8080 }]
+---
+# One app; repeat for each (vectorcraft, lightcraft, filmcraft, effectcraft).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: photocraft
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: photocraft } }
+  template:
+    metadata: { labels: { app: photocraft } }
+    spec:
+      containers:
+        - name: app
+          image: hayone/photocraft:remote
+          ports: [{ containerPort: 8080 }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: photocraft }
+spec:
+  selector: { app: photocraft }
+  ports: [{ port: 8080 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: craft-ai-hub
+  annotations:
+    # ingress-nginx: stream chat replies and keep the tab's WebSocket open.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+spec:
+  ingressClassName: nginx
+  tls: [{ hosts: [craft.example.org], secretName: craft-ai-hub-tls }]
+  rules:
+    - host: craft.example.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: craft-ai-hub, port: { number: 8080 } } }

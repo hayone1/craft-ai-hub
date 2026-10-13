@@ -1,0 +1,26 @@
+# The hub and the relay only, for apps that already run elsewhere: on this machine's ports, or
+# on other servers. List them in APPS by URL.
+#   cp .env.example .env   # then fill it in
+#   docker compose up -d   # http://localhost:8080
+services:
+  hub:
+    image: hayone/craft-ai-hub:latest
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    # Lets APPS reach ports on this machine as host.docker.internal.
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment:
+      APPS: ${APPS:?set APPS}
+      RELAY_URL: http://craft-mcp:8080
+      MCP_KEY: ${MCP_KEY:?set MCP_KEY}
+      BASIC_AUTH: ${BASIC_AUTH:-}
+      CHAT_TOKENS: ${CHAT_TOKENS:-personal}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+    depends_on: [craft-mcp]
+
+  craft-mcp:
+    image: hayone/craft-mcp:latest
+    restart: unless-stopped
+    environment:
+      MCP_KEY: ${MCP_KEY:?set MCP_KEY}
+      PUBLIC_HOST: ${HUB_ORIGIN:-http://localhost:8080}/_relay

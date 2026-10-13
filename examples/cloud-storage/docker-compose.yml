@@ -1,0 +1,57 @@
+# Sign-in with your OpenID Connect provider and cloud folders (personal and shared) in any
+# S3-compatible bucket (AWS S3, Cloudflare R2, MinIO, …). craft-mcp signs people in and serves the
+# folders; the hub uses the same session for the launcher, the apps and chat. Open and Save in
+# PhotoCraft and VectorCraft then offer the cloud next to "This device". Put TLS in front of the
+# hub's port 8080 (the session cookie is Secure).
+#
+# Register <HUB_ORIGIN>/_storage/callback as the redirect URI with your provider, then:
+#   cp .env.example .env   # then fill it in
+#   docker compose up -d
+x-app: &app
+  restart: unless-stopped
+
+services:
+  hub:
+    image: hayone/craft-ai-hub:latest
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    environment:
+      APPS: >-
+        photocraft=http://photocraft:8080,vectorcraft=http://vectorcraft:8080,lightcraft=http://lightcraft:8080,
+        filmcraft=http://filmcraft:8080,effectcraft=http://effectcraft:8080
+      RELAY_URL: http://craft-mcp:8080
+      MCP_KEY: ${MCP_KEY:?set MCP_KEY}
+      REQUIRE_SIGN_IN: "true"
+      PUBLIC_ORIGIN: ${HUB_ORIGIN:?set HUB_ORIGIN}
+      CHAT_TOKENS: ${CHAT_TOKENS:-personal}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+    depends_on: [craft-mcp]
+
+  craft-mcp:
+    image: hayone/craft-mcp:latest
+    restart: unless-stopped
+    environment:
+      MCP_KEY: ${MCP_KEY:?set MCP_KEY}
+      PUBLIC_HOST: ${HUB_ORIGIN}/_relay
+      APP_ORIGIN: ${HUB_ORIGIN}
+      AUTH_NAME: ${AUTH_NAME:-your account}
+      AUTH_ISSUER: ${OIDC_ISSUER_URL:?set OIDC_ISSUER_URL}
+      AUTH_CLIENT_ID: ${OIDC_CLIENT_ID:?set OIDC_CLIENT_ID}
+      AUTH_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      AUTH_USERNAME_CLAIM: ${OIDC_USERNAME_CLAIM:-preferred_username}
+      AUTH_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-groups}
+      STORAGE_NAME: ${STORAGE_NAME:-Cloud}
+      STORAGE_S3_ENDPOINT: ${S3_ENDPOINT:-}
+      STORAGE_S3_REGION: ${S3_REGION:-us-east-1}
+      STORAGE_S3_BUCKET: ${S3_BUCKET:?set S3_BUCKET}
+      STORAGE_S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY}
+      STORAGE_S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY}
+      STORAGE_HOME: users/{username}/
+      # Folders everyone (or only some groups) sees next to "My files".
+      STORAGE_SHARED: ${STORAGE_SHARED:-[{"name":"Team","prefix":"team/"}]}
+
+  photocraft: { <<: *app, image: "hayone/photocraft:remote" }
+  vectorcraft: { <<: *app, image: "hayone/vectorcraft:remote" }
+  lightcraft: { <<: *app, image: "hayone/lightcraft:remote" }
+  filmcraft: { <<: *app, image: "hayone/filmcraft:remote" }
+  effectcraft: { <<: *app, image: "hayone/effectcraft:remote" }

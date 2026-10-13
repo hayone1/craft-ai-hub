@@ -1,6 +1,7 @@
-// Chat for the overlay: POST /_hub/chat runs Claude Code (the Claude Agent SDK), signed in with the
-// subscription token from `claude setup-token` (CLAUDE_CODE_OAUTH_TOKEN). Its only tools are the
-// app's, reached over MCP through the craft-mcp relay, which carries them to the user's tab.
+// Chat for the overlay: POST /_hub/chat runs Claude Code (the Claude Agent SDK), signed in with a
+// subscription token from `claude setup-token`: the person's own (server.mjs keeps it in their
+// browser) or the hub's shared CLAUDE_CODE_OAUTH_TOKEN. Its only tools are the app's, reached over
+// MCP through the craft-mcp relay, which carries them to the user's tab.
 //
 //   request   {"app", "chat": "<id>", "mcp": "<the tab's MCP URL>", "text"}   or   {"app", "chat", "reset": true}
 //   response  NDJSON lines: {"type":"text","text"} {"type":"tool","name"} {"type":"done"} {"type":"error","error"}
@@ -16,17 +17,21 @@ const IDLE_MS = 60 * 60_000;
 const WORKDIR = join(tmpdir(), "craft-ai-hub-chat");
 mkdirSync(WORKDIR, { recursive: true });
 
-export const chatEnabled = Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN);
-
 const system = (app, title, description) => `You are the AI assistant built into ${title}${description ? ` (${description})` : ""}, \
 running in the user's browser tab. You act on the document open in that tab through the ${app} tools. \
 Inspect the current state before changing it, make the changes the user asks for, then say briefly what you did. \
 Ask when a request is ambiguous. Keep replies short: the chat is a small panel next to the canvas. Use Markdown sparingly.`;
 
+const CLAUDE_ERRORS = {
+  rate_limit: "The Claude plan's usage limit was reached.",
+  authentication_failed: "Claude didn't accept the token. Create a new one with `claude setup-token`.",
+};
+
 const chats = new Map(); // key/app/chat -> { session, busy, seen }
 
-// key: the tab's relay key; mcpUrl: its MCP endpoint on the relay's internal address.
-export async function handleChat(res, body, { app, title, description, key, mcpUrl }) {
+// key: the tab's relay key; mcpUrl: its MCP endpoint on the relay's internal address; token: the
+// Claude Code token this chat runs on.
+export async function handleChat(res, body, { app, title, description, key, mcpUrl, token }) {
   if (!key) return res.writeHead(400).end();
   const id = `${key}/${app}/${body.chat}`;
   if (body.reset) {
@@ -43,6 +48,9 @@ export async function handleChat(res, body, { app, title, description, key, mcpU
 
   res.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-store", "x-accel-buffering": "no" });
   const emit = (event) => res.writableEnded || res.destroyed || res.write(`${JSON.stringify(event)}\n`);
+  // One failure tends to surface several times (the message, the result, the exception): report it once.
+  let failed = false;
+  const fail = (error) => { if (!failed) emit({ type: "error", error }); failed = true; };
   const abortController = new AbortController();
   res.on("close", () => abortController.abort());
 
@@ -51,6 +59,7 @@ export async function handleChat(res, body, { app, title, description, key, mcpU
       prompt: text,
       options: {
         cwd: WORKDIR,
+        env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: token },
         systemPrompt: system(app, title, description),
         ...(process.env.CHAT_MODEL && { model: process.env.CHAT_MODEL }),
         ...(process.env.CHAT_EFFORT && { effort: process.env.CHAT_EFFORT }),
@@ -65,7 +74,6 @@ export async function handleChat(res, body, { app, title, description, key, mcpU
         abortController,
       },
     });
-    let failed = false;
     for await (const m of run) {
       if (m.session_id) chat.session = m.session_id;
       if (m.type === "stream_event") {
@@ -75,17 +83,16 @@ export async function handleChat(res, body, { app, title, description, key, mcpU
         for (const block of m.message.content) {
           if (block.type === "tool_use") emit({ type: "tool", name: block.name.replace(`mcp__${app}__`, "") });
         }
-        if (m.error) emit({ type: "error", error: m.error === "rate_limit" ? "Your Claude plan's usage limit was reached." : `Claude error: ${m.error}` });
+        if (m.error) fail(CLAUDE_ERRORS[m.error] ?? `Claude error: ${m.error}`);
       } else if (m.type === "result" && m.is_error) {
-        failed = true;
-        emit({ type: "error", error: m.errors?.join("\n") || (m.subtype === "error_max_turns" ? "Stopped after too many steps." : "Claude Code stopped with an error.") });
+        fail(m.errors?.join("\n") || (m.subtype === "error_max_turns" ? "Stopped after too many steps." : "Claude Code stopped with an error."));
       }
     }
     if (!failed) emit({ type: "done" });
   } catch (e) {
     if (!abortController.signal.aborted) {
       console.error(`chat ${app}: ${e}`);
-      emit({ type: "error", error: String(e?.message ?? e) });
+      fail(String(e?.message ?? e).replace(/^Claude Code returned an error result: /, ""));
     }
   } finally {
     chat.busy = false;

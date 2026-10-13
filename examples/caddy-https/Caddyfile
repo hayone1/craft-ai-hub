@@ -1,0 +1,7 @@
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy hub:8080 {
+		# Chat replies stream; send them on as they come.
+		flush_interval -1
+	}
+}

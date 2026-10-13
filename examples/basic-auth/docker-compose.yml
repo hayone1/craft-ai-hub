@@ -17,6 +17,7 @@ services:
       RELAY_URL: http://craft-mcp:8080
       MCP_KEY: ${MCP_KEY:?set MCP_KEY}
       BASIC_AUTH: ${BASIC_AUTH:?set BASIC_AUTH to user:password}
+      CHAT_TOKENS: ${CHAT_TOKENS:-personal}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
     depends_on: [craft-mcp]
 

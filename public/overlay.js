@@ -79,7 +79,7 @@
 
       header { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 12px; border-bottom: 1px solid #2e2e2e; background: #242424; user-select: none; }
       .win.float header { cursor: move; }
-      header .name { font-weight: 600; margin-right: 6px; }
+      header .name { font-weight: 600; margin-right: 6px; white-space: nowrap; }
       .tabs { display: flex; gap: 2px; margin-right: auto; }
       .tabs button { border: none; background: none; padding: 4px 8px; color: #9a9a9a; border-radius: 5px; }
       .tabs button[aria-selected="true"] { background: #333; color: #eee; }
@@ -126,6 +126,9 @@
       .client.off { opacity: .5; }
       input { flex: 1; min-width: 0; border: 1px solid #3a3a3a; border-radius: 6px; background: #1b1b1b; color: #cfcfcf; padding: 6px 8px; font-family: ui-monospace, monospace; font-size: 11px; }
       .links { display: flex; justify-content: space-between; margin-top: 12px; }
+      .steps { margin: 10px 0 0; padding-left: 18px; } .steps li { margin-bottom: 4px; }
+      .steps code { white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; background: #2a2a2a; padding: 1px 4px; border-radius: 4px; }
+      .account a { color: #6cb4ff; }
       .link { background: none; border: none; padding: 0; color: #9a9a9a; text-decoration: underline; }
     </style>
     <button class="fab" aria-label="Open the AI assistant"><span class="spark">✦</span><span>Ask AI</span><span class="dot"></span></button>
@@ -136,6 +139,7 @@
         <div class="tabs" role="tablist">
           <button role="tab" data-tab="chat">Chat</button>
           <button role="tab" data-tab="connect">Connect</button>
+          <button role="tab" data-tab="account">Account</button>
         </div>
         <button class="icon" data-act="home" title="All apps">⌂</button>
         <button class="icon" data-act="new" title="New chat">＋</button>
@@ -153,6 +157,7 @@
         </div>
       </div>
       <div class="body connect" hidden></div>
+      <div class="body account connect" hidden></div>
     </section>`;
   const $ = (s) => root.querySelector(s);
   const fab = $(".fab");
@@ -160,7 +165,8 @@
   const log = $(".log");
   const input = $("textarea");
   const sendBtn = $(".send");
-  const connectView = $(".body.connect");
+  const connectView = $(".body.connect:not(.account)");
+  const accountView = $(".body.account");
   const chatView = $(".body.chat");
 
   let relayout = false;
@@ -186,12 +192,15 @@
     for (const b of root.querySelectorAll("[data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === ui.tab));
     chatView.hidden = ui.tab !== "chat";
     connectView.hidden = ui.tab !== "connect";
+    accountView.hidden = ui.tab !== "account";
+    $('[data-tab="account"]').hidden = !hub.chat || hub.tokens === "shared";
     $('[data-act="new"]').hidden = ui.tab !== "chat";
     // The app sizes its canvas from the window; tell it the space changed.
     relayout = true;
     dispatchEvent(new Event("resize"));
     relayout = false;
     if (open && ui.tab === "connect") renderConnect();
+    if (open && ui.tab === "account") renderAccount();
     persistUi();
   }
   const setMode = (mode) => {
@@ -345,7 +354,7 @@
     const controller = new AbortController();
     setRunning(controller);
     try {
-      if (!hub.chat) throw new Error("chat is not set up on this hub (it needs a Claude Code token)");
+      if (!hub.chat) throw new Error("chat is off on this hub; use the Connect tab with Claude or Claude Code");
       await connected();
       const r = await fetch("/_hub/chat", {
         method: "POST",
@@ -355,6 +364,7 @@
       });
       if (!r.ok) {
         const body = await r.json().catch(() => null);
+        if (body?.needToken) { ui.tab = "account"; layout(); }
         throw new Error(body?.error ?? (r.status === 409 ? "The assistant is still answering." : `the server answered ${r.status}`));
       }
       const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -397,6 +407,38 @@
     if (e.key === "Escape") $('[data-act="close"]').click();
   });
   sendBtn.onclick = () => (running ? running.abort() : send(input.value));
+
+  // ---- account (whose Claude plan chats run on) -------------------------------------------
+  async function renderAccount(message = "") {
+    const r = await fetch("/_hub/token", { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+    if (!r) { accountView.innerHTML = `<div class="err">Couldn't reach the hub.</div>`; return; }
+    const fallback = r.shared ? "Without one, chats use this hub's shared Claude account." : "Chat needs one.";
+    accountView.innerHTML = `
+      <h2>Your Claude account</h2>
+      ${r.personal
+        ? `<div class="muted">Chats run on your own Claude plan. The token is stored encrypted in this browser only.</div>
+           <div class="links"><button class="link" data-remove>Remove my token</button></div>`
+        : `<div class="muted">Chat on your own Claude plan (Pro or Max). ${fallback}</div>
+           <ol class="muted steps">
+             <li>On a computer with <a href="https://claude.com/claude-code" target="_blank" rel="noopener">Claude Code</a>, run <code>claude setup-token</code> and sign in.</li>
+             <li>Paste the token it prints here. It is stored encrypted in this browser only, and never shown again.</li>
+           </ol>
+           <div class="row"><input type="password" placeholder="sk-ant-oat01-…" aria-label="Claude Code token" autocomplete="off"><button class="primary" data-save>Save</button></div>`}
+      ${message ? `<div class="${message.startsWith("!") ? "err" : "muted"}" style="margin-top:8px">${esc(message.replace(/^!/, ""))}</div>` : ""}`;
+    accountView.querySelector("[data-remove]")?.addEventListener("click", async () => {
+      await fetch("/_hub/token", { method: "DELETE" });
+      renderAccount("Removed.");
+    });
+    accountView.querySelector("[data-save]")?.addEventListener("click", async () => {
+      const token = accountView.querySelector("input").value.trim();
+      const s = await fetch("/_hub/token", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token }) });
+      const err = s.ok ? null : (await s.json().catch(() => ({}))).error ?? `the hub answered ${s.status}`;
+      if (err) return renderAccount(`!${err}`);
+      ui.tab = "chat";
+      layout();
+      input.focus();
+    });
+  }
 
   // ---- connect (external MCP clients) -----------------------------------------------------
   let error = "";

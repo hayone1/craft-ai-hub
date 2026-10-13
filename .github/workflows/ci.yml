@@ -26,3 +26,4 @@ jobs:
           curl -fs -u me:pw localhost:8080/ | grep -q 'href="/photocraft/"'
           curl -fs -u me:pw localhost:8080/photocraft/ | grep -q '/_hub/overlay.js'
           curl -fs localhost:8080/_hub/overlay.js | grep -q craftHub
+          curl -fs -u me:pw localhost:8080/_hub/token | grep -q '"tokens":"personal"'

@@ -1,5 +1,8 @@
 {
   "name": "craft-ai-hub",
+  "description": "Launcher, proxy and Claude Code assistant overlay for the storytold craft web apps",
+  "license": "MIT",
+  "repository": "github:hayone1/craft-ai-hub",
   "private": true,
   "type": "module",
   "dependencies": {

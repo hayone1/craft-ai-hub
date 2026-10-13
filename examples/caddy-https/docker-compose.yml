@@ -1,0 +1,51 @@
+# craft-ai-hub on your own domain with automatic HTTPS (Caddy and Let's Encrypt) and basic auth.
+# Point the domain's DNS at this machine and open ports 80 and 443, then:
+#   cp .env.example .env   # then fill it in
+#   docker compose up -d   # https://<DOMAIN>
+x-app: &app
+  restart: unless-stopped
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [hub]
+
+  hub:
+    image: hayone/craft-ai-hub:latest
+    restart: unless-stopped
+    environment:
+      APPS: >-
+        photocraft=http://photocraft:8080,vectorcraft=http://vectorcraft:8080,lightcraft=http://lightcraft:8080,
+        filmcraft=http://filmcraft:8080,effectcraft=http://effectcraft:8080
+      RELAY_URL: http://craft-mcp:8080
+      MCP_KEY: ${MCP_KEY:?set MCP_KEY}
+      BASIC_AUTH: ${BASIC_AUTH:?set BASIC_AUTH to user:password}
+      PUBLIC_ORIGIN: https://${DOMAIN}
+      CHAT_TOKENS: ${CHAT_TOKENS:-personal}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+    depends_on: [craft-mcp]
+
+  craft-mcp:
+    image: hayone/craft-mcp:latest
+    restart: unless-stopped
+    environment:
+      MCP_KEY: ${MCP_KEY:?set MCP_KEY}
+      PUBLIC_HOST: https://${DOMAIN}/_relay
+
+  photocraft: { <<: *app, image: "hayone/photocraft:remote" }
+  vectorcraft: { <<: *app, image: "hayone/vectorcraft:remote" }
+  lightcraft: { <<: *app, image: "hayone/lightcraft:remote" }
+  filmcraft: { <<: *app, image: "hayone/filmcraft:remote" }
+  effectcraft: { <<: *app, image: "hayone/effectcraft:remote" }
+
+volumes:
+  caddy-data:
+  caddy-config:
