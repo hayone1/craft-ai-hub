@@ -117,7 +117,18 @@
       .bar { display: flex; align-items: center; gap: 6px; }
       .bar .fill { flex: 1; }
       .chip { border: 1px solid #343434; background: #232323; color: #cfcfcf; border-radius: 999px; padding: 3px 10px; font-size: 12px; white-space: nowrap; }
-      .chip.mode-auto { color: #e6b450; border-color: #4a3f22; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; }
+      .chip svg { width: 14px; height: 14px; }
+      .chip.mode-edit { color: #e6b450; border-color: #4a3f22; }
+      .chip.mode-bypass { color: #f08a7a; border-color: #5a2a24; }
+      .opt.mode { display: flex; gap: 12px; align-items: flex-start; padding: 8px 10px; }
+      .opt.mode svg { flex: none; margin-top: 2px; color: #bdbdbd; }
+      .opt.mode > span:nth-child(2) { flex: 1; }
+      .opt.mode .tick { color: #e3e3e3; align-self: center; }
+      .modes-h { display: flex; justify-content: space-between; align-items: center; text-transform: none; letter-spacing: 0; font-size: 12px; }
+      kbd { font: 11px ui-monospace, Menlo, Consolas, monospace; border: 1px solid #444; border-radius: 4px; padding: 0 4px; color: #bbb; }
+      .effort { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 4px; padding: 8px 10px 6px; border-top: 1px solid #333; }
+      .effort input { flex: 0 0 120px; width: 120px; accent-color: #4aa0f5; padding: 0; border: none; }
       .chip.mode-plan { color: #7fb2ff; border-color: #24364f; }
       .timer { color: #8a8a8a; font-size: 11px; font-variant-numeric: tabular-nums; }
       .send.primary { border-radius: 999px; width: 30px; height: 30px; padding: 0; background: #d97757; border-color: #d97757; }
@@ -127,7 +138,7 @@
       .att img, .thumbs img { width: 52px; height: 52px; object-fit: cover; border-radius: 6px; border: 1px solid #333; display: block; }
       .att .x { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; border-radius: 50%; font-size: 12px; line-height: 1; }
       .thumbs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
-      .menu, .slash { position: absolute; z-index: 5; min-width: 220px; max-width: calc(100% - 16px); max-height: 60%; overflow-y: auto; padding: 4px;
+      .menu, .slash { position: absolute; z-index: 5; min-width: 220px; max-width: calc(100% - 16px); max-height: calc(100% - 70px); overflow-y: auto; padding: 4px;
         background: #262626; border: 1px solid #3a3a3a; border-radius: 10px; box-shadow: 0 10px 30px #000a; }
       .slash { left: 10px; right: 10px; bottom: calc(100% - 4px); max-height: 240px; }
       .mh { color: #8a8a8a; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px 2px; }
@@ -362,12 +373,16 @@
   // Settings for the next message, like Claude Code's composer: model, effort, thinking, permission mode.
   const MODELS = hub.models ?? [{ value: "", label: "Default" }];
   const EFFORTS = hub.efforts ?? [];
+  // Line icons for the modes menu.
+  const svg = (d) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const MODES = {
-    ask: ["Ask before acting", "Claude asks before each change to the document."],
-    auto: ["Act without asking", "Claude makes changes straight away."],
-    plan: ["Plan mode", "Claude only looks, and proposes a plan of changes."],
+    ask: ["Manual", "Claude asks for approval before each change to the document.", svg('<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 5.5v-1a1.5 1.5 0 0 1 3 0V12M14 5.5a1.5 1.5 0 0 1 3 0V12M17 8.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-2a6 6 0 0 1-5-2.7L4.3 14a1.5 1.5 0 0 1 2.4-1.8L8 14"/>')],
+    edit: ["Edit automatically", "Claude edits straight away, and asks before closing, deleting or saving over things.", svg('<path d="m8 8-4 4 4 4M16 8l4 4-4 4"/>')],
+    plan: ["Plan", "Claude looks at the document and presents a plan before editing.", svg('<path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/>')],
+    bypass: ["Bypass permissions", "Claude never asks for approval, even before steps that lose work.", svg('<path d="M4 7h11a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h11"/><path d="m17 16 3 3-3 3"/>')],
   };
   const cfg = Object.assign({ model: "", effort: "", permission: "ask", thinking: true }, load("craftHubChatCfg"));
+  if (!MODES[cfg.permission]) cfg.permission = cfg.permission === "auto" ? "bypass" : "ask";
   const saveCfg = () => { keep("craftHubChatCfg", cfg); renderBar(); };
 
   // Chats in this browser, newest first: [{ id, title, updated, items }]. Items:
@@ -450,7 +465,7 @@
   // ---- composer bar: model and effort, permission mode, attachments, timer
   function renderBar() {
     $('[data-menu="model"]').textContent = `${label(cfg.model)}${cfg.effort ? ` · ${cap(cfg.effort)}` : ""}`;
-    $('[data-menu="permission"]').textContent = MODES[cfg.permission][0];
+    $('[data-menu="permission"]').innerHTML = `${MODES[cfg.permission][2]}<span>${MODES[cfg.permission][0]}</span>`;
     $('[data-menu="permission"]').className = `chip mode-${cfg.permission}`;
     $(".attachments").innerHTML = pending.map((p, i) => `<span class="att"><img src="${p.url}" alt=""><button class="x" data-drop="${i}" title="Remove">×</button></span>`).join("");
     $(".attachments").hidden = !pending.length;
@@ -483,20 +498,28 @@
     openMenu(e.currentTarget, `
       <div class="mh">Model</div>
       ${MODELS.map((m) => `<button class="opt${m.value === cfg.model ? " on" : ""}" data-model="${esc(m.value)}">${esc(m.label)}</button>`).join("")}
-      ${EFFORTS.length ? `<div class="mh">Effort</div><div class="seg">
-        <button class="${cfg.effort ? "" : "on"}" data-effort="">Auto</button>
-        ${EFFORTS.map((x) => `<button class="${x === cfg.effort ? "on" : ""}" data-effort="${x}">${cap(x)}</button>`).join("")}</div>` : ""}
       <label class="opt check"><input type="checkbox" ${cfg.thinking ? "checked" : ""} data-thinking> Show thinking</label>`, (m) => {
       for (const b of m.querySelectorAll("[data-model]")) b.onclick = () => { cfg.model = b.dataset.model; saveCfg(); closeMenu(); };
-      for (const b of m.querySelectorAll("[data-effort]")) b.onclick = () => { cfg.effort = b.dataset.effort; saveCfg(); closeMenu(); };
       m.querySelector("[data-thinking]").onchange = (x) => { cfg.thinking = x.target.checked; saveCfg(); };
     });
   };
   $('[data-menu="permission"]').onclick = (e) => {
     if (!menu.hidden) return closeMenu();
-    openMenu(e.currentTarget, `<div class="mh">Permissions</div>${Object.entries(MODES).map(([k, [name, desc]]) =>
-      `<button class="opt${k === cfg.permission ? " on" : ""}" data-mode="${k}"><div>${name}</div><div class="muted">${desc}</div></button>`).join("")}`, (m) => {
+    // Effort (Auto, then each level) is a slider under the modes, as in Claude Code's menu.
+    const levels = ["", ...EFFORTS];
+    const at = Math.max(0, levels.indexOf(cfg.effort));
+    openMenu(e.currentTarget, `<div class="mh modes-h"><span>Modes</span><span class="keys"><kbd>⇧</kbd> + <kbd>tab</kbd> to switch</span></div>
+      ${Object.entries(MODES).map(([k, [name, desc, icon]]) =>
+        `<button class="opt mode${k === cfg.permission ? " on" : ""}" data-mode="${k}">${icon}<span><div>${name}</div><div class="muted">${desc}</div></span>${k === cfg.permission ? '<span class="tick">✓</span>' : ""}</button>`).join("")}
+      ${EFFORTS.length ? `<div class="effort"><span>Effort <span class="muted" data-effort-label>(${at ? cap(levels[at]) : "Auto"})</span></span>
+        <input type="range" min="0" max="${levels.length - 1}" step="1" value="${at}" aria-label="Effort"></div>` : ""}`, (m) => {
       for (const b of m.querySelectorAll("[data-mode]")) b.onclick = () => { cfg.permission = b.dataset.mode; saveCfg(); closeMenu(); };
+      const range = m.querySelector('input[type="range"]');
+      if (range) range.oninput = () => {
+        cfg.effort = levels[range.value];
+        m.querySelector("[data-effort-label]").textContent = `(${cfg.effort ? cap(cfg.effort) : "Auto"})`;
+        saveCfg();
+      };
     });
   };
   $('[data-act="history"]').onclick = (e) => {
@@ -575,7 +598,7 @@
     ["/clear", "Start a new chat"],
     ["/model", "Set the model: " + MODELS.map((m) => m.label.toLowerCase().replace(/\s+/g, "")).join(", ")],
     ["/effort", "Set the effort: auto, " + EFFORTS.join(", ")],
-    ["/mode", "Permissions: ask, auto, plan"],
+    ["/mode", "Permissions: ask, edit, plan, bypass (or Shift+Tab)"],
     ["/thinking", "Show or hide thinking: on, off"],
     ["/compact", "Summarize the chat so far to free up context"],
     ["/help", "List these commands"],
@@ -595,7 +618,7 @@
         if (arg !== "auto" && !EFFORTS.includes(arg)) { note(`Effort: auto, ${EFFORTS.join(", ")}`); return true; }
         cfg.effort = arg === "auto" ? "" : arg; saveCfg(); note(`Effort: ${cap(arg)}`); return true;
       case "/mode": case "/permissions":
-        if (!MODES[arg]) { note("Modes: ask, auto, plan"); return true; }
+        if (!MODES[arg]) { note("Modes: ask, edit, plan, bypass"); return true; }
         cfg.permission = arg; saveCfg(); note(MODES[arg][0]); return true;
       case "/thinking":
         cfg.thinking = arg ? arg !== "off" : !cfg.thinking; saveCfg(); note(`Thinking ${cfg.thinking ? "shown" : "hidden"}`); return true;
@@ -703,6 +726,12 @@
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); }
     if (e.key === "Escape") { if (running) running.abort(); else if (!menu.hidden) closeMenu(); else $('[data-act="close"]').click(); }
     if (e.key === "Tab" && !slash.hidden) { e.preventDefault(); slash.querySelector("[data-cmd]")?.click(); }
+    else if (e.key === "Tab" && e.shiftKey) {
+      e.preventDefault();
+      const keys = Object.keys(MODES);
+      cfg.permission = keys[(keys.indexOf(cfg.permission) + 1) % keys.length];
+      saveCfg();
+    }
   });
   sendBtn.onclick = () => (running ? running.abort() : send(input.value));
   renderBar();

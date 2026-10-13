@@ -4,7 +4,7 @@
 // MCP through the craft-mcp relay, which carries them to the user's tab.
 //
 //   request   {"app", "chat": "<id>", "mcp": "<the tab's MCP URL>", "text", "images"?: [{media_type, data}],
-//              "model"?, "effort"?, "permission"?: "ask"|"auto"|"plan", "thinking"?: bool}
+//              "model"?, "effort"?, "permission"?: "ask"|"edit"|"plan"|"bypass", "thinking"?: bool}
 //             or {"app", "chat", "reset": true}
 //   response  NDJSON lines:
 //             {"type":"text","text"}  {"type":"thinking","text"}
@@ -45,6 +45,8 @@ Plan mode is on: you may only inspect the document. Do not change it. Propose a 
 you would make, and tell the user to switch to another mode to carry it out.` : ""}`;
 
 // Tools that only look: allowed in plan mode, without asking in ask mode.
+// Steps that lose work or leave the document: "edit" mode still asks before these.
+const RISKY = /(^|[_.])(delete|remove|close|clear|reset|discard|revert|overwrite|quit|save|export|open|new)([_.]|$)/i;
 const READ_ONLY = /(^|[_.])(list|get|inspect|info|state|status|describe|read|query|search|find|count|export_data_sets|schema|help)([_.]|$)/i;
 
 const CLAUDE_ERRORS = {
@@ -71,7 +73,7 @@ export async function handleChat(res, body, { app, title, description, key, mcpU
   if (!text && !images.length) return res.writeHead(400).end();
   const model = MODELS.some((m) => m.value === body.model) ? body.model : process.env.CHAT_MODEL || "";
   const effort = EFFORTS.includes(body.effort) ? body.effort : process.env.CHAT_EFFORT || undefined;
-  const permission = ["ask", "auto", "plan"].includes(body.permission) ? body.permission : "auto";
+  const permission = { auto: "bypass" }[body.permission] ?? (["ask", "edit", "plan", "bypass"].includes(body.permission) ? body.permission : "ask");
 
   let chat = chats.get(id);
   if (chat?.busy) return res.writeHead(409).end();
@@ -95,7 +97,7 @@ export async function handleChat(res, body, { app, title, description, key, mcpU
       return READ_ONLY.test(tool) ? { behavior: "allow", updatedInput: input }
         : { behavior: "deny", message: "Plan mode: don't change the document; describe this step in the plan instead." };
     }
-    if (permission === "auto" || READ_ONLY.test(tool) || chat.always.has(tool)) return { behavior: "allow", updatedInput: input };
+    if (permission === "bypass" || READ_ONLY.test(tool) || chat.always.has(tool) || (permission === "edit" && !RISKY.test(tool))) return { behavior: "allow", updatedInput: input };
     const ask = randomUUID();
     emit({ type: "permission", id: ask, name: tool, input });
     const answer = await new Promise((resolve) => {

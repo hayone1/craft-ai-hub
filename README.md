@@ -11,7 +11,7 @@ VectorCraft, LightCraft, FilmCraft, EffectCraft and the rest) with an AI assista
   (each person's own, or one shared by the hub), so you don't need an API key. Claude works on
   the document open in your tab.
 - **A full chat composer**, like Claude Code's: pick the model and effort, show or hide
-  thinking, choose permissions (ask before each change, act without asking, or plan only), attach
+  thinking, choose a mode (Manual, Edit automatically, Plan, Bypass permissions; Shift+Tab cycles), attach
   or paste images, stop a reply, expand each tool call's input and result, see tokens and time per
   turn, switch between earlier chats, and use slash commands (`/model`, `/effort`, `/mode`,
   `/clear`, `/compact`, `/help`).
