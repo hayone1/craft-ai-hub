@@ -1,0 +1,36 @@
+# craft-ai-hub with basic auth, in front of the craft apps and the craft-mcp relay.
+#   cp .env.example .env   # then fill it in
+#   docker compose up -d   # http://localhost:8080
+# Only the hub is published; the apps and the relay stay on the compose network.
+x-app: &app
+  restart: unless-stopped
+
+services:
+  hub:
+    image: hayone/craft-ai-hub:latest
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    environment:
+      APPS: >-
+        photocraft=http://photocraft:8080,vectorcraft=http://vectorcraft:8080,lightcraft=http://lightcraft:8080,
+        filmcraft=http://filmcraft:8080,effectcraft=http://effectcraft:8080
+      RELAY_URL: http://craft-mcp:8080
+      MCP_KEY: ${MCP_KEY:?set MCP_KEY}
+      BASIC_AUTH: ${BASIC_AUTH:?set BASIC_AUTH to user:password}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+    depends_on: [craft-mcp]
+
+  craft-mcp:
+    image: hayone/craft-mcp:latest
+    restart: unless-stopped
+    environment:
+      MCP_KEY: ${MCP_KEY:?set MCP_KEY}
+      # Where browsers and MCP clients reach the relay: through the hub.
+      PUBLIC_HOST: ${HUB_ORIGIN:-http://localhost:8080}/_relay
+
+  # The remote images carry the page API and MCP connector the assistant needs.
+  photocraft: { <<: *app, image: "hayone/photocraft:remote" }
+  vectorcraft: { <<: *app, image: "hayone/vectorcraft:remote" }
+  lightcraft: { <<: *app, image: "hayone/lightcraft:remote" }
+  filmcraft: { <<: *app, image: "hayone/filmcraft:remote" }
+  effectcraft: { <<: *app, image: "hayone/effectcraft:remote" }

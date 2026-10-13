@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: node --check server.mjs && node --check chat.mjs && node --check public/overlay.js
+      - name: Proxy, overlay injection and basic auth
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/app && printf '<!doctype html><html><head><title>t</title></head><body></body></html>' > /tmp/app/index.html
+          (cd /tmp/app && python3 -m http.server 9100 >/dev/null 2>&1 &)
+          APPS=photocraft=http://127.0.0.1:9100 BASIC_AUTH=me:pw node server.mjs &
+          for i in $(seq 30); do curl -fs localhost:8080/healthz >/dev/null && break; sleep 1; done
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/)" = 401
+          curl -fs -u me:pw localhost:8080/ | grep -q 'href="/photocraft/"'
+          curl -fs -u me:pw localhost:8080/photocraft/ | grep -q '/_hub/overlay.js'
+          curl -fs localhost:8080/_hub/overlay.js | grep -q craftHub
