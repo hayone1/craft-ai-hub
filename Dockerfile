@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 # craft-ai-hub: launcher, reverse proxy and AI assistant overlay for the craft web apps (server.mjs).
 FROM node:22-bookworm-slim
+# The Codex CLI checks TLS against the system's CA certificates (Node brings its own).
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
