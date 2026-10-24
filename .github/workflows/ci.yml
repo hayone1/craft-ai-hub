@@ -14,7 +14,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - run: node --check server.mjs && node --check chat.mjs && node --check public/overlay.js
+      - run: for f in *.mjs public/overlay.js; do node --check "$f"; done
       - name: Proxy, overlay injection and basic auth
         run: |
           set -euo pipefail
@@ -27,3 +27,7 @@ jobs:
           curl -fs -u me:pw localhost:8080/photocraft/ | grep -q '/_hub/overlay.js'
           curl -fs localhost:8080/_hub/overlay.js | grep -q craftHub
           curl -fs -u me:pw localhost:8080/_hub/token | grep -q '"tokens":"personal"'
+          curl -fs -u me:pw localhost:8080/photocraft/ | grep -q '"id":"codex"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/_hub/mcp/nope)" = 404
+          node -e "import('@openai/codex-sdk').then(() => console.log('codex sdk ok'))"
+          node node_modules/@openai/codex/bin/codex.js --version

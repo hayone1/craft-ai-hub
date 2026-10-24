@@ -1,6 +1,6 @@
 // craft-ai-hub: one front door for the craft web apps. It lists them, proxies each one under
 // /<app>/, and injects an AI assistant overlay (public/overlay.js) into their pages. The overlay's
-// chat runs here on Claude Code and drives the app over MCP through the craft-mcp relay.
+// chat runs here on Claude Code or OpenAI Codex and drives the app over MCP through the craft-mcp relay.
 //
 //   /                          launcher
 //   /<app>/...                 the app (APPS), with the overlay injected into its HTML
@@ -8,24 +8,29 @@
 //   /<app>/_storage/...        cloud storage (craft-mcp /storage/<app>/...)
 //   /_storage/...              sign-in and its callback, for every app
 //   /_relay/...                craft-mcp itself: the tab's WebSocket and the MCP endpoints
-//   /_hub/overlay.js, /_hub/chat
+//   /_hub/overlay.js, /_hub/chat, /_hub/token, /_hub/codex
+//   /_hub/mcp/<gate>           Codex's way to the relay, past the permission prompts (loopback only)
 //
 // Environment (see README.md):
 //   APPS                     photocraft=http://photocraft:8080,vectorcraft=http://localhost:8082,...
 //   RELAY_URL, MCP_KEY       craft-mcp's internal URL and its MCP_KEY (optional: no assistant)
 //   CLAUDE_CODE_OAUTH_TOKEN  a shared token from `claude setup-token` (CHAT_MODEL, CHAT_EFFORT optional)
 //   CHAT_TOKENS              personal | shared | both | off: whose Claude account chats run on
-//   HUB_SECRET               encrypts personal tokens in their cookie (default: derived from MCP_KEY)
+//   HUB_SECRET               encrypts personal tokens and sign-ins (default: derived from MCP_KEY)
+//   CHAT_PROVIDERS           claude,codex: the agents chat offers (Codex runs on each person's ChatGPT sign-in)
+//   DATA_DIR                 where ChatGPT sign-ins and Codex sessions are kept (encrypted; default: a temp folder)
 //   BASIC_AUTH               user:password[,user:password...]
 //   REQUIRE_SIGN_IN          "true": craft-mcp's OpenID Connect sign-in
 //   PUBLIC_ORIGIN            https://<this host>, when the forwarded headers don't say it
 //   PORT                     default 8080
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import zlib from "node:zlib";
-import { EFFORTS, MODELS, answerPermission, handleChat } from "./chat.mjs";
+import { PROVIDERS, answerPermission, handleChat } from "./chat.mjs";
+import * as codex from "./codex.mjs";
+import { cookieValue, open as openToken, seal as sealToken } from "./seal.mjs";
 
 const CATALOG = {
   photocraft: ["PhotoCraft", "Image editing, Photoshop-style"],
@@ -69,30 +74,15 @@ const SHARED_TOKEN = process.env.CLAUDE_CODE_OAUTH_TOKEN ?? "";
 const TOKENS = process.env.CHAT_TOKENS || (SHARED_TOKEN ? "both" : "personal");
 if (!["personal", "shared", "both", "off"].includes(TOKENS)) throw new Error("CHAT_TOKENS: personal, shared, both or off");
 if (TOKENS === "shared" && !SHARED_TOKEN) throw new Error("CHAT_TOKENS=shared needs CLAUDE_CODE_OAUTH_TOKEN");
-const chatEnabled = Boolean(process.env.RELAY_URL) && TOKENS !== "off";
-const TOKEN_KEY = createHash("sha256").update(`craft-ai-hub/token/${process.env.HUB_SECRET || process.env.MCP_KEY || randomBytes(32).toString("hex")}`).digest();
-const sealToken = (token) => {
-  const iv = randomBytes(12);
-  const c = createCipheriv("aes-256-gcm", TOKEN_KEY, iv);
-  const body = Buffer.concat([c.update(token, "utf8"), c.final()]);
-  return Buffer.concat([iv, c.getAuthTag(), body]).toString("base64url");
-};
-const openToken = (sealed) => {
-  try {
-    const raw = Buffer.from(sealed, "base64url");
-    const d = createDecipheriv("aes-256-gcm", TOKEN_KEY, raw.subarray(0, 12));
-    d.setAuthTag(raw.subarray(12, 28));
-    return Buffer.concat([d.update(raw.subarray(28)), d.final()]).toString("utf8");
-  } catch { return ""; }
-};
+// Codex runs on each person's own ChatGPT sign-in (codex.mjs); CHAT_TOKENS is about Claude only.
+const providers = PROVIDERS.filter((p) => p.id !== "claude" || TOKENS !== "off");
+const chatEnabled = Boolean(process.env.RELAY_URL) && providers.length > 0;
 const TOKEN_COOKIE = "craft_hub_token";
-const personalToken = (req) => {
-  if (TOKENS === "shared") return "";
-  const m = new RegExp(`(?:^|;\\s*)${TOKEN_COOKIE}=([^;]+)`).exec(req.headers.cookie ?? "");
-  return m ? openToken(m[1]) : "";
-};
-const tokenCookie = (req, value, maxAge) =>
-  `${TOKEN_COOKIE}=${value}; Path=/_hub; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${origin(req).startsWith("https:") ? "; Secure" : ""}`;
+const personalToken = (req) => (TOKENS === "shared" ? "" : openToken(cookieValue(req, TOKEN_COOKIE)));
+const hubCookie = (req, name, value, maxAge) =>
+  `${name}=${value}; Path=/_hub; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${origin(req).startsWith("https:") ? "; Secure" : ""}`;
+const tokenCookie = (req, value, maxAge) => hubCookie(req, TOKEN_COOKIE, value, maxAge);
+const YEAR = 365 * 86400;
 
 const OVERLAY = readFileSync(new URL("./public/overlay.js", import.meta.url));
 
@@ -145,7 +135,7 @@ function injectInto(app) {
     body.on("data", (c) => chunks.push(c));
     body.on("error", () => res.headersSent || res.writeHead(502).end());
     body.on("end", () => {
-      const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled, tokens: TOKENS, models: MODELS, efforts: EFFORTS }).replace(/</g, "\\u003c");
+      const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled, tokens: TOKENS, providers }).replace(/</g, "\\u003c");
       const html = Buffer.concat(chunks).toString("utf8")
         .replace(/<head(\s[^>]*)?>/i, (m) => `${m}<script>window.craftHub=${settings}</script>`)
         .replace(/<\/head>/i, '<script src="/_hub/overlay.js" defer></script></head>');
@@ -244,6 +234,11 @@ const server = createServer(async (req, res) => {
     if (path === "/_hub/overlay.js") {
       return res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" }).end(OVERLAY);
     }
+    // Codex's MCP connection: only from this machine, by a gate id that lives for one reply.
+    if (path.startsWith("/_hub/mcp/")) {
+      const local = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress);
+      return local ? codex.handleGate(req, res, path.slice("/_hub/mcp/".length)) : res.writeHead(404).end();
+    }
     if (path.startsWith("/_relay/")) {
       if (!RELAY) return res.writeHead(404).end();
       return forward(req, res, relayUrl(path.slice("/_relay".length), url.search));
@@ -255,13 +250,42 @@ const server = createServer(async (req, res) => {
     }
     if (path === "/_hub/token") {
       if (!(await isSignedIn(req))) return json(res, 401, { error: "Sign in first." });
-      if (req.method === "GET") return json(res, 200, { tokens: TOKENS, personal: Boolean(personalToken(req)), shared: Boolean(SHARED_TOKEN) && TOKENS !== "personal" });
+      if (req.method === "GET") {
+        return json(res, 200, {
+          tokens: TOKENS, personal: Boolean(personalToken(req)), shared: Boolean(SHARED_TOKEN) && TOKENS !== "personal",
+          providers: providers.map((p) => p.id), codex: providers.some((p) => p.id === "codex") && codex.signedIn(req),
+        });
+      }
       if (TOKENS === "shared" || TOKENS === "off") return res.writeHead(404).end();
       if (req.method === "DELETE") return res.writeHead(204, { "set-cookie": tokenCookie(req, "", 0) }).end();
       if (req.method !== "POST") return res.writeHead(405).end();
       const token = String((await readJson(req)).token ?? "").trim();
       if (!/^[\w.-]{20,500}$/.test(token)) return json(res, 400, { error: "That doesn't look like a token from claude setup-token." });
-      return res.writeHead(204, { "set-cookie": tokenCookie(req, sealToken(token), 365 * 86400) }).end();
+      return res.writeHead(204, { "set-cookie": tokenCookie(req, sealToken(token), YEAR) }).end();
+    }
+    // ChatGPT sign-in for Codex: POST /_hub/codex/login starts a device-code sign-in ({id, url, code}),
+    // GET /_hub/codex/login?id= reports it (and keeps it once done); POST /_hub/codex {auth} takes an
+    // auth.json; DELETE /_hub/codex signs out.
+    if (path === "/_hub/codex" || path === "/_hub/codex/login") {
+      if (!(await isSignedIn(req))) return json(res, 401, { error: "Sign in first." });
+      if (!providers.some((p) => p.id === "codex")) return res.writeHead(404).end();
+      const keep = (auth) => [hubCookie(req, codex.COOKIE, codex.newAccount(auth), YEAR)];
+      if (path === "/_hub/codex/login") {
+        if (req.method === "POST") return json(res, 200, await codex.startLogin().catch((e) => ({ error: e.message })));
+        const login = codex.takeLogin(url.searchParams.get("id") ?? "");
+        if (login.state !== "done") return json(res, 200, login);
+        codex.removeAccount(req);
+        return res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store", "set-cookie": keep(login.auth) }).end(JSON.stringify({ state: "done" }));
+      }
+      if (req.method === "DELETE") {
+        codex.removeAccount(req);
+        return res.writeHead(204, { "set-cookie": hubCookie(req, codex.COOKIE, "", 0) }).end();
+      }
+      if (req.method !== "POST") return res.writeHead(405).end();
+      const auth = String((await readJson(req)).auth ?? "").trim();
+      if (!codex.validAuth(auth)) return json(res, 400, { error: "That isn't a Codex auth.json from a ChatGPT sign-in." });
+      codex.removeAccount(req);
+      return res.writeHead(204, { "set-cookie": keep(auth) }).end();
     }
     if (path === "/_hub/chat" || path === "/_hub/chat/permission") {
       if (req.method !== "POST") return res.writeHead(405).end();
@@ -275,9 +299,12 @@ const server = createServer(async (req, res) => {
       if (!m || m[2] !== app.name || !validKey(m[1])) return json(res, 403, { error: "This tab's assistant connection is not valid; reconnect it." });
       if (path === "/_hub/chat/permission") return answerPermission(res, body, { app: app.name, key: m[1] });
       const mcpUrl = relayUrl(`/${m[1]}/${m[2]}/mcp`).href;
-      const token = personalToken(req) || (TOKENS === "personal" ? "" : SHARED_TOKEN);
-      if (!token && !body.reset) return json(res, 401, { error: "Add your Claude account to chat.", needToken: true });
-      return handleChat(res, body, { app: app.name, title: app.title, description: app.description, key: m[1], mcpUrl, token });
+      const provider = (providers.find((p) => p.id === body.provider) ?? providers[0]).id;
+      const auth = provider === "codex" ? codex.accountOf(req) : personalToken(req) || (TOKENS === "personal" ? "" : SHARED_TOKEN);
+      if (!body.reset && (provider === "codex" ? !codex.signedIn(req) : !auth)) {
+        return json(res, 401, { error: provider === "codex" ? "Sign in with ChatGPT to chat with Codex." : "Add your Claude account to chat.", needToken: true, provider });
+      }
+      return handleChat(res, body, { app: app.name, title: app.title, description: app.description, key: m[1], mcpUrl, provider, auth });
     }
     if (path === "/") {
       if (!(await isSignedIn(req))) return signInPage(res);
@@ -336,5 +363,5 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 server.listen(Number(process.env.PORT) || 8080, () => {
-  console.log(`craft-ai-hub: ${[...APPS.keys()].join(", ")}; relay ${RELAY ? RELAY.href : "off"}; chat ${chatEnabled ? `on (${TOKENS} tokens)` : "off"}`);
+  console.log(`craft-ai-hub: ${[...APPS.keys()].join(", ")}; relay ${RELAY ? RELAY.href : "off"}; chat ${chatEnabled ? `on (${providers.map((p) => (p.id === "claude" ? `claude, ${TOKENS} tokens` : p.id)).join("; ")})` : "off"}`);
 });

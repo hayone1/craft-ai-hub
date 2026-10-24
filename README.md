@@ -7,10 +7,11 @@ VectorCraft, LightCraft, FilmCraft, EffectCraft and the rest) with an AI assista
 - **Proxy**: serves every app under `/<app>/` from its own container, by URL or port.
 - **Assistant overlay**: a chat on top of every app that collapses to an "Ask AI" button, floats
   (drag, resize) or docks to the side while the canvas makes room. The apps carry no chat code.
-- **Chat on Claude Code**: replies come from Claude Code signed in with a Claude subscription
-  (each person's own, or one shared by the hub), so you don't need an API key. Claude works on
-  the document open in your tab.
-- **A full chat composer**, like Claude Code's: pick the model and effort, show or hide
+- **Chat on Claude Code or OpenAI Codex**: replies come from Claude Code signed in with a Claude
+  subscription (each person's own, or one shared by the hub), or from Codex signed in with the
+  person's ChatGPT account, so you don't need an API key. The agent works on the document open in
+  your tab, with the app's tools and nothing else.
+- **A full chat composer**, like Claude Code's: pick the agent, model and effort, show or hide
   thinking, choose a mode (Manual, Edit automatically, Plan, Bypass permissions; Shift+Tab cycles), attach
   or paste images, stop a reply, expand each tool call's input and result, see tokens and time per
   turn, switch between earlier chats, and use slash commands (`/model`, `/effort`, `/mode`,
@@ -26,7 +27,7 @@ Works from any browser, an iPad included: the app runs in the tab, Claude runs o
 ```
 browser ──▶ craft-ai-hub ──▶ /<app>/        app containers (hayone/<app>:remote)
                │         ──▶ /_relay/…      craft-mcp: the tab's WebSocket and the MCP endpoints
-               └─ chat: Claude Code ──MCP──▶ craft-mcp ──▶ app CLI ──▶ the user's tab
+               └─ chat: Claude Code or Codex ──MCP──▶ craft-mcp ──▶ app CLI ──▶ the user's tab
 ```
 
 - [craft-mcp](https://github.com/hayone1/Docker_Images/tree/main/craft-mcp) relays MCP calls
@@ -51,9 +52,14 @@ Pick an example, copy its `.env.example` to `.env`, fill it in, and `docker comp
 
 Each one publishes only the front door; the apps and the relay stay on the private network.
 
-## Claude accounts
+## Accounts
 
-Chat runs on Claude subscription tokens from Claude Code. Create one on any computer signed in
+`CHAT_PROVIDERS` (default `claude,codex`) lists the agents the composer offers. The model menu
+groups their models; picking another agent's model starts a new chat.
+
+### Claude
+
+Claude chats run on Claude subscription tokens from Claude Code. Create one on any computer signed in
 to Claude Code (Pro or Max plan):
 
 ```sh
@@ -74,6 +80,25 @@ an HttpOnly cookie that only `/_hub/` receives, so neither the apps' scripts nor
 ever hold it. People set it up once per browser, from a computer, and then chat from anywhere,
 an iPad included.
 
+### ChatGPT (Codex)
+
+Codex chats run on each person's own ChatGPT plan. In the overlay's **Account** tab:
+
+- **Sign in with ChatGPT**: the hub starts Codex's device-code sign-in and shows a link and a
+  code. Open the link on any device (the iPad you're on works), sign in and enter the code. If
+  ChatGPT refuses the code, turn on device code sign-in for Codex in ChatGPT's security settings.
+- **Or paste `auth.json`**: after `codex login` on a computer, paste `~/.codex/auth.json`.
+
+The sign-in is kept in `DATA_DIR`, encrypted with a key that only that browser's HttpOnly cookie
+holds, so the disk alone can't open it. Codex refreshes it as it goes, and the hub keeps the
+newest copy. Mount a volume at `DATA_DIR` (`/data` in the image) to keep sign-ins and Codex's
+chat sessions across restarts; sign-ins unused for 90 days are removed.
+
+Codex runs with its shell, file edits, web search, plugins, browser and sub-agents switched off,
+read-only in an empty folder and with none of the hub's environment, so the app's MCP tools are
+all it can use. It reaches them through the hub (`/_hub/mcp/…`, from the hub itself only), which
+applies the permission mode before each call.
+
 ## Configuration
 
 | Variable | Default | |
@@ -83,9 +108,13 @@ an iPad included.
 | `MCP_KEY` | | The same value craft-mcp has. craft-mcp's `PUBLIC_HOST` must be `<hub origin>/_relay`. |
 | `CHAT_TOKENS` | `personal`, or `both` with a shared token | Whose Claude account chats use (see above). |
 | `CLAUDE_CODE_OAUTH_TOKEN` | | The hub's shared token. |
-| `HUB_SECRET` | derived from `MCP_KEY` | Encrypts personal tokens. Changing it signs every browser's token out. |
-| `CHAT_MODEL`, `CHAT_EFFORT` | Claude Code's | Defaults when the composer leaves them on Default and Auto. |
-| `CHAT_MODELS` | Opus, Sonnet, Haiku 5.5, Fable 5.1 | The composer's model menu, as JSON `[{"value": "<model id>", "label": "<name>"}]`. |
+| `HUB_SECRET` | derived from `MCP_KEY` | Encrypts personal tokens and ChatGPT sign-ins. Changing it signs every browser out. |
+| `CHAT_PROVIDERS` | `claude,codex` | The agents chat offers, in the menu's order. |
+| `CHAT_MODEL`, `CHAT_EFFORT` | Claude Code's | Claude's defaults when the composer leaves them on Default and Auto. |
+| `CHAT_MODELS` | Opus, Sonnet, Haiku 5.5, Fable 5.1 | Claude's model menu, as JSON `[{"value": "<model id>", "label": "<name>"}]`. |
+| `CODEX_MODEL`, `CODEX_EFFORT` | Codex's | Codex's defaults. |
+| `CODEX_MODELS` | GPT-6 Luna, GPT-5.6 Terra, GPT-5.6 Luna | Codex's model menu, same JSON. |
+| `DATA_DIR` | `/data` in the image | ChatGPT sign-ins (encrypted) and Codex sessions. |
 | `BASIC_AUTH` | | `user:password` pairs, comma separated. |
 | `REQUIRE_SIGN_IN` | `false` | `true` signs people in through craft-mcp's own OpenID Connect client (its `AUTH_*` settings). |
 | `PUBLIC_ORIGIN` | from the request | `https://<host>`, used for the sign-in callback. |
@@ -114,7 +143,9 @@ chat on the hub uses that one plan.
 | `/<app>/_assistant/session` | Mints the tab's relay key (craft-mcp `/mint`) |
 | `/<app>/_storage/…`, `/_storage/…` | craft-mcp cloud storage and its sign-in |
 | `/_relay/…` | craft-mcp: the tab's WebSocket, `/<key>/<app>/mcp` |
-| `/_hub/overlay.js`, `/_hub/chat`, `/_hub/chat/permission`, `/_hub/token` | The overlay, its chat and permission answers, and the person's own token |
+| `/_hub/overlay.js`, `/_hub/chat`, `/_hub/chat/permission`, `/_hub/token` | The overlay, its chat and permission answers, and the person's own Claude token |
+| `/_hub/codex`, `/_hub/codex/login` | The person's ChatGPT sign-in (device code or `auth.json`) |
+| `/_hub/mcp/<gate>` | Codex's MCP connection to the tab, from the hub itself only |
 | `/healthz` | Health check |
 
 ## Develop
@@ -124,8 +155,9 @@ npm install
 APPS=photocraft=http://localhost:4101 node server.mjs
 ```
 
-Node 22. No build step: `server.mjs` (proxy, launcher, auth), `chat.mjs` (Claude Code),
-`public/overlay.js` (the overlay).
+Node 22. No build step: `server.mjs` (proxy, launcher, auth), `chat.mjs` (chat and permission
+modes), `claude.mjs` (Claude Code), `codex.mjs` (Codex and ChatGPT sign-in), `seal.mjs`
+(encryption), `public/overlay.js` (the overlay).
 
 ## License
 

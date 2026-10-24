@@ -25,6 +25,9 @@ spec:
             - { name: CHAT_TOKENS, value: "personal" }
           ports: [{ containerPort: 8080 }]
           readinessProbe: { httpGet: { path: /healthz, port: 8080 } }
+          # ChatGPT sign-ins (encrypted) and Codex sessions; use a PersistentVolumeClaim to keep them across pods.
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes: [{ name: data, emptyDir: {} }]
 ---
 apiVersion: v1
 kind: Service

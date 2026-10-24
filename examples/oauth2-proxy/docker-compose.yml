@@ -45,6 +45,9 @@ services:
       PUBLIC_ORIGIN: ${HUB_ORIGIN:?set HUB_ORIGIN}
       CHAT_TOKENS: ${CHAT_TOKENS:-personal}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      CHAT_PROVIDERS: ${CHAT_PROVIDERS:-claude,codex}
+    # ChatGPT sign-ins (encrypted) and Codex sessions.
+    volumes: ["hub-data:/data"]
     depends_on: [craft-mcp]
 
   craft-mcp:
@@ -59,3 +62,6 @@ services:
   lightcraft: { <<: *app, image: "hayone/lightcraft:remote" }
   filmcraft: { <<: *app, image: "hayone/filmcraft:remote" }
   effectcraft: { <<: *app, image: "hayone/effectcraft:remote" }
+
+volumes:
+  hub-data:

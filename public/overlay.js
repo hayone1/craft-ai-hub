@@ -1,7 +1,7 @@
 // craft-ai-hub's assistant overlay, injected into every app page the hub serves: a chat window that
 // collapses to an "Ask AI" button, floats (drag, resize) or docks to the right edge with the app's
-// canvas making room. Chat runs in craft-ai-hub (POST /_hub/chat), where Claude Code drives the app
-// over MCP through the craft-mcp relay. The "Connect" tab hands the same connection to an external
+// canvas making room. Chat runs in craft-ai-hub (POST /_hub/chat), where Claude Code or OpenAI Codex
+// drives the app over MCP through the craft-mcp relay. The "Connect" tab hands the same connection to an external
 // MCP client.
 //
 // The connection itself belongs to the app page (craft-remote.js in the remote images), which
@@ -180,6 +180,11 @@
       .steps code { white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; background: #2a2a2a; padding: 1px 4px; border-radius: 4px; }
       .account a { color: #6cb4ff; }
       .link { background: none; border: none; padding: 0; color: #9a9a9a; text-decoration: underline; }
+      .account section + section { margin-top: 18px; padding-top: 14px; border-top: 1px solid #2e2e2e; }
+      .code { font: 600 20px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .08em; color: #fff; }
+      .account textarea { margin-top: 8px; min-height: 70px; border: 1px solid #3a3a3a; border-radius: 6px; background: #1b1b1b; padding: 6px 8px;
+        font: 11px ui-monospace, monospace; color: #cfcfcf; }
+      .account details summary { cursor: pointer; color: #9a9a9a; font-size: 12px; margin-top: 10px; }
     </style>
     <button class="fab" aria-label="Open the AI assistant"><span class="spark">✦</span><span>Ask AI</span><span class="dot"></span></button>
     <section class="win" role="dialog" aria-label="AI assistant" hidden>
@@ -255,7 +260,7 @@
     chatView.hidden = ui.tab !== "chat";
     connectView.hidden = ui.tab !== "connect";
     accountView.hidden = ui.tab !== "account";
-    $('[data-tab="account"]').hidden = !hub.chat || hub.tokens === "shared";
+    $('[data-tab="account"]').hidden = !hub.chat || !PROVIDERS.some((p) => p.id === "codex" || hub.tokens !== "shared");
     $('[data-act="new"]').hidden = ui.tab !== "chat";
     $('[data-act="history"]').hidden = ui.tab !== "chat";
     // The app sizes its canvas from the window; tell it the space changed.
@@ -370,20 +375,25 @@
     effectcraft: ["Describe the composition", "Add a fade-in to the first layer", "List the layers"],
   }[app] ?? ["What can you do here?"];
 
-  // Settings for the next message, like Claude Code's composer: model, effort, thinking, permission mode.
-  const MODELS = hub.models ?? [{ value: "", label: "Default" }];
-  const EFFORTS = hub.efforts ?? [];
+  // Settings for the next message, like Claude Code's composer: agent and model, effort, thinking,
+  // permission mode. Each provider (Claude, Codex) has its own models and efforts.
+  const PROVIDERS = hub.providers?.length ? hub.providers : [{ id: "claude", label: "Claude", short: "Claude", models: [{ value: "", label: "Default" }], efforts: [] }];
+  const providerOf = (id) => PROVIDERS.find((p) => p.id === id) ?? PROVIDERS[0];
   // Line icons for the modes menu.
   const svg = (d) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const MODES = {
-    ask: ["Manual", "Claude asks for approval before each change to the document.", svg('<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 5.5v-1a1.5 1.5 0 0 1 3 0V12M14 5.5a1.5 1.5 0 0 1 3 0V12M17 8.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-2a6 6 0 0 1-5-2.7L4.3 14a1.5 1.5 0 0 1 2.4-1.8L8 14"/>')],
-    edit: ["Edit automatically", "Claude edits straight away, and asks before closing, deleting or saving over things.", svg('<path d="m8 8-4 4 4 4M16 8l4 4-4 4"/>')],
-    plan: ["Plan", "Claude looks at the document and presents a plan before editing.", svg('<path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/>')],
-    bypass: ["Bypass permissions", "Claude never asks for approval, even before steps that lose work.", svg('<path d="M4 7h11a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h11"/><path d="m17 16 3 3-3 3"/>')],
+    ask: ["Manual", "{who} asks for approval before each change to the document.", svg('<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 5.5v-1a1.5 1.5 0 0 1 3 0V12M14 5.5a1.5 1.5 0 0 1 3 0V12M17 8.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-2a6 6 0 0 1-5-2.7L4.3 14a1.5 1.5 0 0 1 2.4-1.8L8 14"/>')],
+    edit: ["Edit automatically", "{who} edits straight away, and asks before closing, deleting or saving over things.", svg('<path d="m8 8-4 4 4 4M16 8l4 4-4 4"/>')],
+    plan: ["Plan", "{who} looks at the document and presents a plan before editing.", svg('<path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/>')],
+    bypass: ["Bypass permissions", "{who} never asks for approval, even before steps that lose work.", svg('<path d="M4 7h11a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h11"/><path d="m17 16 3 3-3 3"/>')],
   };
-  const cfg = Object.assign({ model: "", effort: "", permission: "ask", thinking: true }, load("craftHubChatCfg"));
+  const cfg = Object.assign({ provider: PROVIDERS[0].id, model: "", effort: "", permission: "ask", thinking: true }, load("craftHubChatCfg"));
   if (!MODES[cfg.permission]) cfg.permission = cfg.permission === "auto" ? "bypass" : "ask";
+  if (providerOf(cfg.provider).id !== cfg.provider) Object.assign(cfg, { provider: PROVIDERS[0].id, model: "", effort: "" });
   const saveCfg = () => { keep("craftHubChatCfg", cfg); renderBar(); };
+  const P = () => providerOf(cfg.provider);
+  const MODELS = () => P().models;
+  const EFFORTS = () => P().efforts;
 
   // Chats in this browser, newest first: [{ id, title, updated, items }]. Items:
   //   user {text, images: n, thumbs?}  assistant {text}  thinking {text, open}
@@ -408,7 +418,17 @@
 
   const short = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
   const pretty = (v) => { try { return JSON.stringify(v, null, 2); } catch { return String(v); } };
-  const label = (value) => MODELS.find((m) => m.value === value)?.label ?? (value || "Default");
+  const label = (value) => MODELS().find((m) => m.value === value)?.label ?? (value || "Default");
+  const modeText = (desc) => desc.replace("{who}", P().short);
+  // Another agent can't pick up this chat: switching starts a new one.
+  function setProvider(id, model = "") {
+    if (id !== cfg.provider) {
+      Object.assign(cfg, { provider: id, effort: "" });
+      if (chat.items.length) newChat();
+    }
+    cfg.model = model;
+    saveCfg();
+  }
   const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
   let frame = 0;
@@ -416,7 +436,7 @@
   function drawLog() {
     if (!chat.items.length && !running) {
       log.innerHTML = `<div class="empty"><div class="spark">✦</div><h3>What should we do in ${esc(title)}?</h3>
-        <div>The assistant works on what's open in this tab. Paste or drop images to show it something.</div>
+        <div>${PROVIDERS.length > 1 ? `${esc(P().short)} works` : "The assistant works"} on what's open in this tab. Paste or drop images to show it something.</div>
         <div class="chips">${SUGGEST.map((s) => `<button>${esc(s)}</button>`).join("")}</div></div>`;
       for (const b of log.querySelectorAll(".chips button")) b.onclick = () => send(b.textContent);
       return;
@@ -464,7 +484,7 @@
 
   // ---- composer bar: model and effort, permission mode, attachments, timer
   function renderBar() {
-    $('[data-menu="model"]').textContent = `${label(cfg.model)}${cfg.effort ? ` · ${cap(cfg.effort)}` : ""}`;
+    $('[data-menu="model"]').textContent = `${PROVIDERS.length > 1 ? `${P().short} · ` : ""}${label(cfg.model)}${cfg.effort ? ` · ${cap(cfg.effort)}` : ""}`;
     $('[data-menu="permission"]').innerHTML = `${MODES[cfg.permission][2]}<span>${MODES[cfg.permission][0]}</span>`;
     $('[data-menu="permission"]').className = `chip mode-${cfg.permission}`;
     $(".attachments").innerHTML = pending.map((p, i) => `<span class="att"><img src="${p.url}" alt=""><button class="x" data-drop="${i}" title="Remove">×</button></span>`).join("");
@@ -496,22 +516,22 @@
   $('[data-menu="model"]').onclick = (e) => {
     if (!menu.hidden) return closeMenu();
     openMenu(e.currentTarget, `
-      <div class="mh">Model</div>
-      ${MODELS.map((m) => `<button class="opt${m.value === cfg.model ? " on" : ""}" data-model="${esc(m.value)}">${esc(m.label)}</button>`).join("")}
+      ${PROVIDERS.map((p) => `<div class="mh">${esc(PROVIDERS.length > 1 ? p.label : "Model")}</div>
+        ${p.models.map((m) => `<button class="opt${p.id === cfg.provider && m.value === cfg.model ? " on" : ""}" data-provider="${esc(p.id)}" data-model="${esc(m.value)}">${esc(m.label)}</button>`).join("")}`).join("")}
       <label class="opt check"><input type="checkbox" ${cfg.thinking ? "checked" : ""} data-thinking> Show thinking</label>`, (m) => {
-      for (const b of m.querySelectorAll("[data-model]")) b.onclick = () => { cfg.model = b.dataset.model; saveCfg(); closeMenu(); };
+      for (const b of m.querySelectorAll("[data-model]")) b.onclick = () => { setProvider(b.dataset.provider, b.dataset.model); closeMenu(); };
       m.querySelector("[data-thinking]").onchange = (x) => { cfg.thinking = x.target.checked; saveCfg(); };
     });
   };
   $('[data-menu="permission"]').onclick = (e) => {
     if (!menu.hidden) return closeMenu();
     // Effort (Auto, then each level) is a slider under the modes, as in Claude Code's menu.
-    const levels = ["", ...EFFORTS];
+    const levels = ["", ...EFFORTS()];
     const at = Math.max(0, levels.indexOf(cfg.effort));
     openMenu(e.currentTarget, `<div class="mh modes-h"><span>Modes</span><span class="keys"><kbd>⇧</kbd> + <kbd>tab</kbd> to switch</span></div>
       ${Object.entries(MODES).map(([k, [name, desc, icon]]) =>
-        `<button class="opt mode${k === cfg.permission ? " on" : ""}" data-mode="${k}">${icon}<span><div>${name}</div><div class="muted">${desc}</div></span>${k === cfg.permission ? '<span class="tick">✓</span>' : ""}</button>`).join("")}
-      ${EFFORTS.length ? `<div class="effort"><span>Effort <span class="muted" data-effort-label>(${at ? cap(levels[at]) : "Auto"})</span></span>
+        `<button class="opt mode${k === cfg.permission ? " on" : ""}" data-mode="${k}">${icon}<span><div>${name}</div><div class="muted">${modeText(desc)}</div></span>${k === cfg.permission ? '<span class="tick">✓</span>' : ""}</button>`).join("")}
+      ${EFFORTS().length ? `<div class="effort"><span>Effort <span class="muted" data-effort-label>(${at ? cap(levels[at]) : "Auto"})</span></span>
         <input type="range" min="0" max="${levels.length - 1}" step="1" value="${at}" aria-label="Effort"></div>` : ""}`, (m) => {
       for (const b of m.querySelectorAll("[data-mode]")) b.onclick = () => { cfg.permission = b.dataset.mode; saveCfg(); closeMenu(); };
       const range = m.querySelector('input[type="range"]');
@@ -533,6 +553,8 @@
         if (!b.dataset.chat) return newChat();
         if (running) return;
         chat = chats.find((c) => c.id === b.dataset.chat) ?? chat;
+        if (chat.provider && chat.provider !== cfg.provider && PROVIDERS.some((p) => p.id === chat.provider)) Object.assign(cfg, { provider: chat.provider, model: "", effort: "" });
+        saveCfg();
         renderLog();
       };
     }, true);
@@ -541,7 +563,7 @@
   $('[data-act="attach"]').onclick = () => fileInput.click();
   fileInput.onchange = () => { addImages([...fileInput.files]); fileInput.value = ""; };
 
-  // Images go to Claude as base64; big ones are scaled down to 1600 px first.
+  // Images go to the agent as base64; big ones are scaled down to 1600 px first.
   async function addImages(files) {
     for (const f of files.filter((x) => x.type.startsWith("image/")).slice(0, 8 - pending.length)) {
       const url = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
@@ -593,11 +615,12 @@
     input.focus();
   }
 
-  // Slash commands handled here; any other /command goes to Claude Code (e.g. /compact).
+  // Slash commands handled here; any other /command goes to the agent (e.g. Claude Code's /compact).
+  const ALL_MODELS = PROVIDERS.flatMap((p) => p.models.filter((m) => m.value).map((m) => ({ ...m, provider: p.id })));
   const COMMANDS = [
     ["/clear", "Start a new chat"],
-    ["/model", "Set the model: " + MODELS.map((m) => m.label.toLowerCase().replace(/\s+/g, "")).join(", ")],
-    ["/effort", "Set the effort: auto, " + EFFORTS.join(", ")],
+    ["/model", "Set the model: " + ALL_MODELS.map((m) => m.label.toLowerCase().replace(/\s+/g, "")).join(", ")],
+    ["/effort", "Set the effort: auto, " + [...new Set(PROVIDERS.flatMap((p) => p.efforts))].join(", ")],
     ["/mode", "Permissions: ask, edit, plan, bypass (or Shift+Tab)"],
     ["/thinking", "Show or hide thinking: on, off"],
     ["/compact", "Summarize the chat so far to free up context"],
@@ -610,12 +633,12 @@
     switch (cmd) {
       case "/clear": case "/new": newChat(); return true;
       case "/model": {
-        const m = MODELS.find((x) => x.label.toLowerCase().replace(/\s+/g, "") === arg.replace(/\s+/g, "") || x.value === arg || (arg && x.label.toLowerCase().startsWith(arg)));
-        if (!m) { note(`Models: ${MODELS.map((x) => x.label).join(", ")}`); return true; }
-        cfg.model = m.value; saveCfg(); note(`Model: ${m.label}`); return true;
+        const m = ALL_MODELS.find((x) => x.label.toLowerCase().replace(/\s+/g, "") === arg.replace(/\s+/g, "") || x.value === arg || (arg && x.label.toLowerCase().startsWith(arg)));
+        if (!m) { note(`Models: ${ALL_MODELS.map((x) => x.label).join(", ")}`); return true; }
+        setProvider(m.provider, m.value); note(`Model: ${m.label}`); return true;
       }
       case "/effort":
-        if (arg !== "auto" && !EFFORTS.includes(arg)) { note(`Effort: auto, ${EFFORTS.join(", ")}`); return true; }
+        if (arg !== "auto" && !EFFORTS().includes(arg)) { note(`Effort: auto, ${EFFORTS().join(", ")}`); return true; }
         cfg.effort = arg === "auto" ? "" : arg; saveCfg(); note(`Effort: ${cap(arg)}`); return true;
       case "/mode": case "/permissions":
         if (!MODES[arg]) { note("Modes: ask, edit, plan, bypass"); return true; }
@@ -648,17 +671,19 @@
     pending = [];
     chat.items.push({ role: "user", text, images: images.length, thumbs: images.map((p) => p.url) });
     if (!chat.title) chat.title = text.slice(0, 80) || "Images";
+    chat.provider ??= cfg.provider;
     const controller = new AbortController();
     setRunning(controller);
     const tools = new Map();
     try {
       if (!hub.chat) throw new Error("chat is off on this hub; use the Connect tab with Claude or Claude Code");
+      if (chat.provider !== cfg.provider) throw new Error(`this chat is with ${providerOf(chat.provider).short}; start a new chat to use ${P().short}`);
       await connected();
       const r = await fetch("/_hub/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          app, chat: chat.id, text, mcp: A.session.mcp,
+          app, chat: chat.id, text, mcp: A.session.mcp, provider: chat.provider,
           images: images.map(({ media_type, data }) => ({ media_type, data })),
           model: cfg.model, effort: cfg.effort, permission: cfg.permission, thinking: cfg.thinking,
         }),
@@ -702,7 +727,7 @@
             current = null;
             chat.items.push({ role: "error", text: ev.error });
           } else if (ev.type === "done") {
-            const known = MODELS.find((m) => m.value && ev.model?.startsWith(m.value));
+            const known = ALL_MODELS.find((m) => ev.model?.startsWith(m.value));
             const parts = [known ? known.label : ev.model?.replace(/^claude-/, ""),
               ev.usage && `${short(ev.usage.input)} in · ${short(ev.usage.output)} out`, `${(ev.ms / 1000).toFixed(1)}s`].filter(Boolean);
             chat.items.push({ role: "meta", text: parts.join(" · ") });
@@ -736,35 +761,89 @@
   sendBtn.onclick = () => (running ? running.abort() : send(input.value));
   renderBar();
 
-  // ---- account (whose Claude plan chats run on) -------------------------------------------
-  async function renderAccount(message = "") {
+  // ---- account (whose Claude and ChatGPT plans chats run on) ---------------------------------
+  let codexLogin = null; // { id, url, code } while a ChatGPT sign-in is waiting
+  let codexPoll = 0;
+  async function renderAccount(message = "", codexMessage = "") {
     const r = await fetch("/_hub/token", { cache: "no-store" }).then((x) => x.json()).catch(() => null);
     if (!r) { accountView.innerHTML = `<div class="err">Couldn't reach the hub.</div>`; return; }
+    const note = (m) => (m ? `<div class="${m.startsWith("!") ? "err" : "muted"}" style="margin-top:8px">${esc(m.replace(/^!/, ""))}</div>` : "");
+    const has = (id) => PROVIDERS.some((p) => p.id === id);
     const fallback = r.shared ? "Without one, chats use this hub's shared Claude account." : "Chat needs one.";
-    accountView.innerHTML = `
+    const claude = !has("claude") || r.tokens === "shared" ? "" : `<section>
       <h2>Your Claude account</h2>
       ${r.personal
-        ? `<div class="muted">Chats run on your own Claude plan. The token is stored encrypted in this browser only.</div>
+        ? `<div class="muted">Claude chats run on your own Claude plan. The token is stored encrypted in this browser only.</div>
            <div class="links"><button class="link" data-remove>Remove my token</button></div>`
-        : `<div class="muted">Chat on your own Claude plan (Pro or Max). ${fallback}</div>
+        : `<div class="muted">Chat with Claude on your own Claude plan (Pro or Max). ${fallback}</div>
            <ol class="muted steps">
              <li>On a computer with <a href="https://claude.com/claude-code" target="_blank" rel="noopener">Claude Code</a>, run <code>claude setup-token</code> and sign in.</li>
              <li>Paste the token it prints here. It is stored encrypted in this browser only, and never shown again.</li>
            </ol>
-           <div class="row"><input type="password" placeholder="sk-ant-oat01-…" aria-label="Claude Code token" autocomplete="off"><button class="primary" data-save>Save</button></div>`}
-      ${message ? `<div class="${message.startsWith("!") ? "err" : "muted"}" style="margin-top:8px">${esc(message.replace(/^!/, ""))}</div>` : ""}`;
+           <div class="row"><input type="password" placeholder="sk-ant-oat01-…" aria-label="Claude Code token" autocomplete="off" data-claude><button class="primary" data-save>Save</button></div>`}
+      ${note(message)}</section>`;
+    const codex = !has("codex") ? "" : `<section>
+      <h2>Your ChatGPT account</h2>
+      ${r.codex
+        ? `<div class="muted">Codex chats run on your own ChatGPT plan. Your sign-in is kept encrypted on the hub, under a key only this browser holds.</div>
+           <div class="links"><button class="link" data-codex-out>Sign out</button></div>`
+        : codexLogin
+          ? `<div class="muted">Open this page on any device, sign in to ChatGPT and enter the code:</div>
+             <div class="row"><a href="${esc(codexLogin.url)}" target="_blank" rel="noopener">${esc(codexLogin.url.replace(/^https:\/\//, ""))}</a></div>
+             <div class="row"><span class="code">${esc(codexLogin.code)}</span><button data-copy-code>Copy</button></div>
+             <div class="muted" style="margin-top:8px">Waiting for you to finish… The code expires in 15 minutes. If ChatGPT refuses it, turn on device code sign-in for Codex in ChatGPT's security settings.</div>
+             <div class="links"><button class="link" data-codex-cancel>Cancel</button></div>`
+          : `<div class="muted">Chat with Codex on your own ChatGPT plan (Plus, Pro, Business, …).</div>
+             <div class="row"><button class="primary" data-codex-in>Sign in with ChatGPT</button></div>
+             <details><summary>Or paste auth.json from a computer</summary>
+               <div class="muted" style="margin-top:6px">After <code>codex login</code>, copy <code>~/.codex/auth.json</code> here.</div>
+               <textarea aria-label="Codex auth.json" spellcheck="false" data-codex-json></textarea>
+               <div class="row"><button data-codex-save>Save</button></div></details>`}
+      ${note(codexMessage)}</section>`;
+    accountView.innerHTML = claude + codex;
+    const back = () => { ui.tab = "chat"; layout(); input.focus(); };
     accountView.querySelector("[data-remove]")?.addEventListener("click", async () => {
       await fetch("/_hub/token", { method: "DELETE" });
       renderAccount("Removed.");
     });
     accountView.querySelector("[data-save]")?.addEventListener("click", async () => {
-      const token = accountView.querySelector("input").value.trim();
+      const token = accountView.querySelector("[data-claude]").value.trim();
       const s = await fetch("/_hub/token", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token }) });
       const err = s.ok ? null : (await s.json().catch(() => ({}))).error ?? `the hub answered ${s.status}`;
       if (err) return renderAccount(`!${err}`);
-      ui.tab = "chat";
-      layout();
-      input.focus();
+      back();
+    });
+    accountView.querySelector("[data-codex-in]")?.addEventListener("click", async (e) => {
+      e.currentTarget.disabled = true;
+      const s = await fetch("/_hub/codex/login", { method: "POST" }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the hub." }));
+      if (s.error || !s.url) return renderAccount("", `!${s.error ?? "The sign-in didn't start."}`);
+      codexLogin = s;
+      clearInterval(codexPoll);
+      codexPoll = setInterval(async () => {
+        const st = await fetch(`/_hub/codex/login?id=${encodeURIComponent(codexLogin?.id ?? "")}`, { cache: "no-store" }).then((x) => x.json()).catch(() => ({ state: "pending" }));
+        if (st.state === "pending") return;
+        clearInterval(codexPoll);
+        codexLogin = null;
+        if (st.state === "done") { renderAccount("", "Signed in."); if (cfg.provider !== "codex") setProvider("codex"); }
+        else renderAccount("", `!${st.state === "expired" ? "The sign-in expired. Try again." : st.error}`);
+      }, 3000);
+      renderAccount();
+    });
+    accountView.querySelector("[data-copy-code]")?.addEventListener("click", async (e) => {
+      try { await navigator.clipboard.writeText(codexLogin.code); e.currentTarget.textContent = "Copied"; } catch {}
+    });
+    accountView.querySelector("[data-codex-cancel]")?.addEventListener("click", () => { clearInterval(codexPoll); codexLogin = null; renderAccount(); });
+    accountView.querySelector("[data-codex-out]")?.addEventListener("click", async () => {
+      await fetch("/_hub/codex", { method: "DELETE" });
+      renderAccount("", "Signed out.");
+    });
+    accountView.querySelector("[data-codex-save]")?.addEventListener("click", async () => {
+      const auth = accountView.querySelector("[data-codex-json]").value.trim();
+      const s = await fetch("/_hub/codex", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ auth }) });
+      const err = s.ok ? null : (await s.json().catch(() => ({}))).error ?? `the hub answered ${s.status}`;
+      if (err) return renderAccount("", `!${err}`);
+      if (cfg.provider !== "codex") setProvider("codex");
+      back();
     });
   }
 

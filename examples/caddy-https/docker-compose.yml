@@ -31,6 +31,9 @@ services:
       PUBLIC_ORIGIN: https://${DOMAIN}
       CHAT_TOKENS: ${CHAT_TOKENS:-personal}
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      CHAT_PROVIDERS: ${CHAT_PROVIDERS:-claude,codex}
+    # ChatGPT sign-ins (encrypted) and Codex sessions.
+    volumes: ["hub-data:/data"]
     depends_on: [craft-mcp]
 
   craft-mcp:
@@ -47,5 +50,6 @@ services:
   effectcraft: { <<: *app, image: "hayone/effectcraft:remote" }
 
 volumes:
+  hub-data:
   caddy-data:
   caddy-config:
