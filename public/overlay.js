@@ -849,6 +849,7 @@
 
   // ---- connect (external MCP clients) -----------------------------------------------------
   let error = "";
+  let chatgptSteps = false; // stay shown when the tab is drawn again (a connection's state changes)
   function renderConnect() {
     if (!A) {
       connectView.innerHTML = `<h2>Use ${esc(title)} from an AI app</h2>
@@ -887,7 +888,7 @@
         <div class="client"><span>Codex</span><button data-copy-cmd="${esc(codexCmd)}">Copy command</button></div>
         <div class="client off" aria-disabled="true"><span>Gemini</span><button disabled>Coming soon</button></div>
       </div>
-      <ol class="muted steps" data-chatgpt-steps hidden>
+      <ol class="muted steps" data-chatgpt-steps${chatgptSteps ? "" : " hidden"}>
         <li>In ChatGPT on the web, open Settings › Apps › Advanced settings and turn on Developer mode.</li>
         <li>Choose Create app, name it ${esc(title)}, paste the URL (copied) as the MCP server URL and pick No authentication.</li>
         <li>In a chat, pick ${esc(title)} from the + menu (Developer mode) and ask away.</li>
@@ -902,6 +903,7 @@
     // ChatGPT has no link that adds a connector: copy the URL and show the steps.
     connectView.querySelector("[data-chatgpt]").onclick = async (e) => {
       try { await navigator.clipboard.writeText(session.mcp); e.currentTarget.textContent = "Copied"; } catch { e.currentTarget.textContent = "Copy failed"; }
+      chatgptSteps = true;
       connectView.querySelector("[data-chatgpt-steps]").hidden = false;
     };
     connectView.querySelector("[data-copy]").onclick = async (e) => {
