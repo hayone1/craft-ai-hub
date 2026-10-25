@@ -902,9 +902,11 @@
     };
     // ChatGPT has no link that adds a connector: copy the URL and show the steps.
     connectView.querySelector("[data-chatgpt]").onclick = async (e) => {
-      try { await navigator.clipboard.writeText(session.mcp); e.currentTarget.textContent = "Copied"; } catch { e.currentTarget.textContent = "Copy failed"; }
+      // The steps first: the clipboard may wait for the browser's permission.
       chatgptSteps = true;
       connectView.querySelector("[data-chatgpt-steps]").hidden = false;
+      const b = e.currentTarget;
+      try { await navigator.clipboard.writeText(session.mcp); b.textContent = "Copied"; } catch { b.textContent = "Copy failed"; }
     };
     connectView.querySelector("[data-copy]").onclick = async (e) => {
       const field = connectView.querySelector("input");
