@@ -16,8 +16,9 @@ VectorCraft, LightCraft, FilmCraft, EffectCraft and the rest) with an AI assista
   or paste images, stop a reply, expand each tool call's input and result, see tokens and time per
   turn, switch between earlier chats, and use slash commands (`/model`, `/effort`, `/mode`,
   `/clear`, `/compact`, `/help`).
-- **Your own Claude Code too**: the overlay's Connect tab gives each tab its own MCP URL and a
-  `claude mcp add` command, so a Claude Code session or a claude.ai connector can drive several
+- **Your own AI apps too**: the overlay's Connect tab gives each tab its own MCP URL, with a
+  claude.ai connector link, `claude mcp add` and `codex mcp add` commands and the steps for a
+  ChatGPT developer-mode app, so your own Claude, Claude Code, ChatGPT or Codex can drive several
   tabs and apps at once.
 
 Works from any browser, an iPad included: the app runs in the tab, Claude runs on the server.

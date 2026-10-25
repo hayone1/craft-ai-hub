@@ -873,7 +873,9 @@
       return;
     }
     // One name per tab, so Claude Code can drive several tabs (and apps) at once.
-    const cmd = `claude mcp add --transport http ${app}-${session.mcp.split("/").at(-3).split(".")[1].slice(0, 6).toLowerCase()} ${session.mcp}`;
+    const id = `${app}-${session.mcp.split("/").at(-3).split(".")[1].slice(0, 6).toLowerCase()}`;
+    const cmd = `claude mcp add --transport http ${id} ${session.mcp}`;
+    const codexCmd = `codex mcp add ${id} --url ${session.mcp}`;
     const claude = `https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=${encodeURIComponent(title)}&connectorUrl=${encodeURIComponent(session.mcp)}`;
     connectView.innerHTML = `
       <h2>Use ${esc(title)} from an AI app</h2>
@@ -881,15 +883,26 @@
       <div class="clients">
         <div class="client"><span>Claude</span><button class="primary" data-open="${esc(claude)}">Add to Claude</button></div>
         <div class="client"><span>Claude Code</span><button data-copy-cmd="${esc(cmd)}">Copy command</button></div>
-        <div class="client off" aria-disabled="true"><span>ChatGPT</span><button disabled>Coming soon</button></div>
+        <div class="client"><span>ChatGPT</span><button data-chatgpt>Copy URL</button></div>
+        <div class="client"><span>Codex</span><button data-copy-cmd="${esc(codexCmd)}">Copy command</button></div>
         <div class="client off" aria-disabled="true"><span>Gemini</span><button disabled>Coming soon</button></div>
       </div>
+      <ol class="muted steps" data-chatgpt-steps hidden>
+        <li>In ChatGPT on the web, open Settings › Apps › Advanced settings and turn on Developer mode.</li>
+        <li>Choose Create app, name it ${esc(title)}, paste the URL (copied) as the MCP server URL and pick No authentication.</li>
+        <li>In a chat, pick ${esc(title)} from the + menu (Developer mode) and ask away.</li>
+      </ol>
       <div class="muted" style="margin-top:12px">Server URL, for any MCP client. Anyone with it can use this tab, so share it with no one.</div>
       <div class="row"><input readonly value="${esc(session.mcp)}" aria-label="MCP server URL"><button data-copy>Copy</button></div>
       <div class="links"><button class="link" data-new>New URL</button><button class="link" data-off>Disconnect</button></div>`;
     connectView.querySelector("[data-open]").onclick = (e) => window.open(e.currentTarget.dataset.open, "_blank", "noopener");
-    connectView.querySelector("[data-copy-cmd]").onclick = async (e) => {
+    for (const b of connectView.querySelectorAll("[data-copy-cmd]")) b.onclick = async (e) => {
       try { await navigator.clipboard.writeText(e.currentTarget.dataset.copyCmd); e.currentTarget.textContent = "Copied"; } catch { e.currentTarget.textContent = "Copy failed"; }
+    };
+    // ChatGPT has no link that adds a connector: copy the URL and show the steps.
+    connectView.querySelector("[data-chatgpt]").onclick = async (e) => {
+      try { await navigator.clipboard.writeText(session.mcp); e.currentTarget.textContent = "Copied"; } catch { e.currentTarget.textContent = "Copy failed"; }
+      connectView.querySelector("[data-chatgpt-steps]").hidden = false;
     };
     connectView.querySelector("[data-copy]").onclick = async (e) => {
       const field = connectView.querySelector("input");
