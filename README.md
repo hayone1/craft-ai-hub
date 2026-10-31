@@ -23,6 +23,9 @@ VectorCraft, LightCraft, FilmCraft, EffectCraft and the rest) with an AI assista
 
 Works from any browser, an iPad included: the app runs in the tab, Claude runs on the server.
 
+In VS Code (code-server, on an iPad too), [craft-vscode](https://github.com/hayone1/craft-vscode) opens the apps in editor
+panels and lets Claude Code in the workspace drive them; set `EMBED_ORIGINS` to the editor's origin.
+
 ## How it works
 
 ```
@@ -119,6 +122,7 @@ applies the permission mode before each call.
 | `BASIC_AUTH` | | `user:password` pairs, comma separated. |
 | `REQUIRE_SIGN_IN` | `false` | `true` signs people in through craft-mcp's own OpenID Connect client (its `AUTH_*` settings). |
 | `PUBLIC_ORIGIN` | from the request | `https://<host>`, used for the sign-in callback. |
+| `EMBED_ORIGINS` | | Origins that may frame the apps and get the tab's MCP URL, comma separated; `*` stands for host labels: `https://*.code.example.com`. For [craft-vscode](https://github.com/hayone1/craft-vscode) in code-server. |
 | `PORT` | `8080` | |
 
 ### Sign-in

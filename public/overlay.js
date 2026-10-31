@@ -921,6 +921,25 @@
   for (const type of ["keydown", "keyup", "keypress", "paste", "copy", "cut", "pointerdown", "pointerup", "pointermove", "wheel", "contextmenu"]) {
     host.addEventListener(type, (e) => e.stopPropagation());
   }
+  // ---- an editor that frames this page ------------------------------------------------------
+  // A page on one of EMBED_ORIGINS that frames this tab (craft-vscode's panel in VS Code, say) asks
+  // for the tab's MCP URL, so its own agent can drive the app. Only the direct parent is answered,
+  // and only on an allowed origin; it hears again whenever the connection changes.
+  const allowed = (hub.embed ?? []).map((p) => new RegExp(`^${p.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[a-z0-9.-]+")}$`, "i"));
+  const embedders = new Map(); // window -> origin
+  let joining = null;
+  const tell = (w, o) => w.postMessage({
+    type: "craft-hub:session", app, title, state, mcp: A?.session?.mcp ?? null, expires: A?.session?.expires ?? null,
+  }, o);
+  window.addEventListener("message", (e) => {
+    if (window.parent === window || e.source !== window.parent || e.data?.type !== "craft-embed:hello") return;
+    if (!allowed.some((re) => re.test(e.origin))) return;
+    embedders.set(e.source, e.origin);
+    if (A && !joining && state !== "on") joining = connected().catch(() => {}).finally(() => { joining = null; });
+    tell(e.source, e.origin);
+  });
+  onState.add(() => { for (const [w, o] of embedders) tell(w, o); });
+
   const mount = () => { document.body.append(host); renderLog(); layout(); };
   document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", mount) : mount();
   // craft-remote.js runs first in the remote images; give a slow page a moment anyway.

@@ -22,6 +22,7 @@
 //   BASIC_AUTH               user:password[,user:password...]
 //   REQUIRE_SIGN_IN          "true": craft-mcp's OpenID Connect sign-in
 //   PUBLIC_ORIGIN            https://<this host>, when the forwarded headers don't say it
+//   EMBED_ORIGINS            origins that may frame the apps and get the tab's MCP URL (craft-vscode)
 //   PORT                     default 8080
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -57,6 +58,10 @@ const APPS = new Map((process.env.APPS ?? "").split(",").map((s) => s.trim()).fi
 if (!APPS.size) throw new Error("APPS is empty; e.g. APPS=photocraft=http://photocraft:8080");
 for (const name of APPS.keys()) if (!/^[a-z0-9-]+$/.test(name) || name.startsWith("_")) throw new Error(`APPS: bad app name ${name}`);
 
+// Pages that may frame an app and ask the overlay for the tab's MCP URL: https://*.code.example.com,
+// vscode-webview://* (a * stands for one or more host labels).
+const EMBED = (process.env.EMBED_ORIGINS ?? "").split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
+for (const o of EMBED) if (!/^[a-z][a-z0-9+.-]*:\/\/[a-z0-9*.-]+(:\d+)?$/i.test(o)) throw new Error(`EMBED_ORIGINS: bad origin ${o}`);
 const RELAY = process.env.RELAY_URL ? new URL(process.env.RELAY_URL) : null;
 const SECRET = process.env.MCP_KEY ?? "";
 const SIGN_IN = process.env.REQUIRE_SIGN_IN === "true";
@@ -135,7 +140,7 @@ function injectInto(app) {
     body.on("data", (c) => chunks.push(c));
     body.on("error", () => res.headersSent || res.writeHead(502).end());
     body.on("end", () => {
-      const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled, tokens: TOKENS, providers }).replace(/</g, "\\u003c");
+      const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled, tokens: TOKENS, providers, embed: EMBED }).replace(/</g, "\\u003c");
       const html = Buffer.concat(chunks).toString("utf8")
         .replace(/<head(\s[^>]*)?>/i, (m) => `${m}<script>window.craftHub=${settings}</script>`)
         .replace(/<\/head>/i, '<script src="/_hub/overlay.js" defer></script></head>');
