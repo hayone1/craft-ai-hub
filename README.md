@@ -5,7 +5,7 @@ VectorCraft, LightCraft, FilmCraft, EffectCraft and the rest) with an AI assista
 
 - **Launcher**: one page that lists your apps.
 - **Proxy**: serves every app under `/<app>/` from its own container, by URL or port.
-- **Assistant overlay**: a chat on top of every app that collapses to an "Ask AI" button, floats
+- **Assistant overlay**: a chat on top of every app that collapses to a round AI button (✦), floats
   (drag, resize) or docks to the side while the canvas makes room. The apps carry no chat code.
 - **Chat on Claude Code or OpenAI Codex**: replies come from Claude Code signed in with a Claude
   subscription (each person's own, or one shared by the hub), or from Codex signed in with the

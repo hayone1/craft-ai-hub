@@ -1,5 +1,5 @@
 // craft-ai-hub's assistant overlay, injected into every app page the hub serves: a chat window that
-// collapses to an "Ask AI" button, floats (drag, resize) or docks to the right edge with the app's
+// collapses to a round AI button (✦), floats (drag, resize) or docks to the right edge with the app's
 // canvas making room. Chat runs in craft-ai-hub (POST /_hub/chat), where Claude Code or OpenAI Codex
 // drives the app over MCP through the craft-mcp relay. The "Connect" tab hands the same connection to an external
 // MCP client.
@@ -66,9 +66,11 @@
       .dot { width: 8px; height: 8px; border-radius: 50%; background: #777; flex: none; }
       .on .dot { background: #3c3; } .connecting .dot { background: #e0a000; } .replaced .dot, .expired .dot { background: #c33; }
 
-      .fab { position: fixed; right: 16px; bottom: 16px; z-index: 2147483000; display: flex; align-items: center; gap: 8px;
-        padding: 8px 14px; border-radius: 999px; border: 1px solid #3a3a3a; background: #232323f2; color: #e8e8e8; box-shadow: 0 4px 16px #0008; }
-      .fab .spark { color: #d97757; font-size: 15px; }
+      /* A round icon button, so it covers as little of the app as it can; the dot on its edge is the connection state. */
+      .fab { position: fixed; right: 16px; bottom: 16px; z-index: 2147483000; width: 40px; height: 40px; padding: 0;
+        display: grid; place-items: center; border-radius: 50%; border: 1px solid #3a3a3a; background: #232323f2; color: #e8e8e8; box-shadow: 0 4px 16px #0008; }
+      .fab .spark { color: #d97757; font-size: 19px; line-height: 1; }
+      .fab .dot { position: absolute; top: 1px; right: 1px; box-shadow: 0 0 0 2px #232323; }
 
       .win { position: fixed; z-index: 2147483000; display: flex; flex-direction: column; color: #e3e3e3; background: #1f1f1f;
         border: 1px solid #383838; box-shadow: 0 12px 40px #000a; overflow: hidden; }
@@ -186,7 +188,7 @@
         font: 11px ui-monospace, monospace; color: #cfcfcf; }
       .account details summary { cursor: pointer; color: #9a9a9a; font-size: 12px; margin-top: 10px; }
     </style>
-    <button class="fab" aria-label="Open the AI assistant"><span class="spark">✦</span><span>Ask AI</span><span class="dot"></span></button>
+    <button class="fab" aria-label="Open the AI assistant"><span class="spark" aria-hidden="true">✦</span><span class="dot"></span></button>
     <section class="win" role="dialog" aria-label="AI assistant" hidden>
       <div class="grip" aria-hidden="true"></div>
       <header>
