@@ -937,6 +937,8 @@
   window.addEventListener("message", (e) => {
     if (window.parent === window || e.source !== window.parent) return;
     if (e.data?.type === "craft-embed:files-reply") return editor && e.origin === editor.o && answered(e.data);
+    // Files the editor hands over (dropped on its apps list, or "Open in a Craft App").
+    if (e.data?.type === "craft-embed:open-files") return editor && e.origin === editor.o && openFiles(e.data.files);
     if (e.data?.type !== "craft-embed:hello" || !allowed.some((re) => re.test(e.origin))) return;
     embedders.set(e.source, e.origin);
     offerFiles(e.source, e.origin, e.data.files);
@@ -991,6 +993,22 @@
       write: (path, bytes) => ask("write", { path, bytes }),
       mkdir: (path) => ask("mkdir", { path }),
     }];
+  }
+
+  // Hand files to the app as an ordinary file drop on its canvas, once the app has drawn one.
+  async function openFiles(files) {
+    if (!Array.isArray(files) || !files.length) return;
+    let canvas = null;
+    for (let i = 0; i < 120 && !(canvas = document.querySelector("canvas")); i++) await new Promise((r) => setTimeout(r, 250));
+    if (!canvas) return console.warn("craft-web-gateway: no app canvas to open the files in");
+    await new Promise((r) => setTimeout(r, 800));
+    const dt = new DataTransfer();
+    for (const f of files) if (f?.bytes && f.name) dt.items.add(new File([f.bytes], String(f.name), { type: f.type || "" }));
+    const box = canvas.getBoundingClientRect();
+    const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
+    for (const type of ["dragenter", "dragover", "drop"]) {
+      canvas.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, composed: true, dataTransfer: dt, ...at }));
+    }
   }
 
   // Drops from the editor's explorer. A drop of real files (from the desktop) has "Files" and is
