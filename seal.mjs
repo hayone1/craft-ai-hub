@@ -3,6 +3,7 @@
 // else MCP_KEY; changing it signs every browser out.
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
+// The key's label keeps the gateway's old name: a new label would sign every browser out.
 const KEY = createHash("sha256").update(`craft-ai-hub/token/${process.env.HUB_SECRET || process.env.MCP_KEY || randomBytes(32).toString("hex")}`).digest();
 
 export const seal = (text, key = KEY) => {

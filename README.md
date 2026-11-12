@@ -1,4 +1,4 @@
-# craft-ai-hub
+# craft-gateway
 
 A front door for the [storytold craft apps](https://github.com/storytold) (PhotoCraft,
 VectorCraft, LightCraft, FilmCraft, EffectCraft and the rest) with an AI assistant built in.
@@ -30,10 +30,31 @@ list a "VS Code" place next to the cloud folders, and files dragged from the edi
 open in the app. The overlay only talks about files with a parent page on an `EMBED_ORIGINS`
 origin, and the editor decides which files the page may use.
 
+The gateway was called craft-ai-hub until November 2026. The old GitHub address still leads here.
+Internal names keep the old word "hub", so nothing breaks for running setups: the `/_hub/` routes,
+`window.craftHub`, the `craft-hub:session` message, the cookies and `HUB_SECRET`.
+
+## Features
+
+Every feature beyond the launcher and the proxy is optional. Environment variables turn each one
+on or off, so you run only what you need. The section "Configuration" lists every variable.
+
+| Feature | On when | Turn it off |
+| --- | --- | --- |
+| Launcher and proxy | always | |
+| Assistant overlay (chat and the Connect tab) | `RELAY_URL` and `MCP_KEY` are set | Leave `RELAY_URL` empty |
+| Claude chat | `claude` is in `CHAT_PROVIDERS` (the default) | `CHAT_TOKENS=off`, or leave `claude` out of `CHAT_PROVIDERS` |
+| Codex chat | `codex` is in `CHAT_PROVIDERS` (the default) | `CHAT_PROVIDERS=claude` |
+| A shared Claude account | `CLAUDE_CODE_OAUTH_TOKEN` is set | Leave it empty, or set `CHAT_TOKENS=personal` |
+| Sign-in | `BASIC_AUTH` or `REQUIRE_SIGN_IN=true` | Leave both unset |
+| Cloud storage in the apps' File menu | craft-mcp has its `AUTH_*` and `STORAGE_S3_*` settings | Leave those craft-mcp settings empty |
+| Editors that frame the apps (craft-vscode) | `EMBED_ORIGINS` lists their origins | Leave `EMBED_ORIGINS` empty |
+| Workspace files from those editors | `EMBED_ORIGINS` is set (default `EMBED_FILES=true`) | `EMBED_FILES=false` |
+
 ## How it works
 
 ```
-browser ──▶ craft-ai-hub ──▶ /<app>/        app containers (hayone/<app>:remote)
+browser ──▶ craft-gateway ──▶ /<app>/        app containers (hayone/<app>:remote)
                │         ──▶ /_relay/…      craft-mcp: the tab's WebSocket and the MCP endpoints
                └─ chat: Claude Code or Codex ──MCP──▶ craft-mcp ──▶ app CLI ──▶ the user's tab
 ```
