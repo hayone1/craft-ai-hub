@@ -1,4 +1,4 @@
-// craft-gateway: one front door for the craft web apps. It lists them, proxies each one under
+// craft-web-gateway: one front door for the craft web apps. It lists them, proxies each one under
 // /<app>/, and injects an AI assistant overlay (public/overlay.js) into their pages. The overlay's
 // chat runs here on Claude Code or OpenAI Codex and drives the app over MCP through the craft-mcp relay.
 //
@@ -371,5 +371,5 @@ server.on("upgrade", (req, socket, head) => {
 });
 
 server.listen(Number(process.env.PORT) || 8080, () => {
-  console.log(`craft-gateway: ${[...APPS.keys()].join(", ")}; relay ${RELAY ? RELAY.href : "off"}; chat ${chatEnabled ? `on (${providers.map((p) => (p.id === "claude" ? `claude, ${TOKENS} tokens` : p.id)).join("; ")})` : "off"}`);
+  console.log(`craft-web-gateway: ${[...APPS.keys()].join(", ")}; relay ${RELAY ? RELAY.href : "off"}; chat ${chatEnabled ? `on (${providers.map((p) => (p.id === "claude" ? `claude, ${TOKENS} tokens` : p.id)).join("; ")})` : "off"}`);
 });

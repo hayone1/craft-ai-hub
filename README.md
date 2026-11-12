@@ -1,4 +1,4 @@
-# craft-gateway
+# craft-web-gateway
 
 A front door for the [storytold craft apps](https://github.com/storytold) (PhotoCraft,
 VectorCraft, LightCraft, FilmCraft, EffectCraft and the rest) with an AI assistant built in.
@@ -30,7 +30,7 @@ list a "VS Code" place next to the cloud folders, and files dragged from the edi
 open in the app. The overlay only talks about files with a parent page on an `EMBED_ORIGINS`
 origin, and the editor decides which files the page may use.
 
-The gateway was called craft-ai-hub until November 2026. The old GitHub address still leads here.
+The gateway was called craft-ai-hub until November 2026, and craft-gateway for a day after that. The old GitHub addresses still lead here.
 Internal names keep the old word "hub", so nothing breaks for running setups: the `/_hub/` routes,
 `window.craftHub`, the `craft-hub:session` message, the cookies and `HUB_SECRET`.
 
@@ -54,7 +54,7 @@ on or off, so you run only what you need. The section "Configuration" lists ever
 ## How it works
 
 ```
-browser ──▶ craft-gateway ──▶ /<app>/        app containers (hayone/<app>:remote)
+browser ──▶ craft-web-gateway ──▶ /<app>/        app containers (hayone/<app>:remote)
                │         ──▶ /_relay/…      craft-mcp: the tab's WebSocket and the MCP endpoints
                └─ chat: Claude Code or Codex ──MCP──▶ craft-mcp ──▶ app CLI ──▶ the user's tab
 ```
