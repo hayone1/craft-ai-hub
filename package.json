@@ -1,8 +1,8 @@
 {
-  "name": "craft-gateway",
+  "name": "craft-web-gateway",
   "description": "Launcher, proxy and AI assistant overlay (Claude Code or OpenAI Codex) for the storytold craft web apps",
   "license": "MIT",
-  "repository": "github:hayone1/craft-gateway",
+  "repository": "github:hayone1/craft-web-gateway",
   "private": true,
   "type": "module",
   "dependencies": {

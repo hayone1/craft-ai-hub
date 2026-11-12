@@ -1,6 +1,6 @@
-// craft-gateway's assistant overlay, injected into every app page the hub serves: a chat window that
+// craft-web-gateway's assistant overlay, injected into every app page the hub serves: a chat window that
 // collapses to a round AI button (✦), floats (drag, resize) or docks to the right edge with the app's
-// canvas making room. Chat runs in craft-gateway (POST /_hub/chat), where Claude Code or OpenAI Codex
+// canvas making room. Chat runs in craft-web-gateway (POST /_hub/chat), where Claude Code or OpenAI Codex
 // drives the app over MCP through the craft-mcp relay. The "Connect" tab hands the same connection to an external
 // MCP client.
 //
@@ -1037,7 +1037,7 @@
       for (const type of ["dragenter", "dragover", "drop"]) send(type, dt);
     } catch (err) {
       send("dragleave");
-      console.warn(`craft-gateway: the dropped files didn't arrive: ${err.message}`);
+      console.warn(`craft-web-gateway: the dropped files didn't arrive: ${err.message}`);
     }
   }, true);
 

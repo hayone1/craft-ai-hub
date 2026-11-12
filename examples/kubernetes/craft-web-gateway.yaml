@@ -1,23 +1,23 @@
-# craft-gateway and craft-mcp on Kubernetes, with an Ingress for one host. The apps run wherever
+# craft-web-gateway and craft-mcp on Kubernetes, with an Ingress for one host. The apps run wherever
 # you like (here: in-cluster Deployments of the :remote images); list them in APPS by URL.
 #   kubectl create namespace craft
-#   kubectl -n craft create secret generic craft-gateway \
+#   kubectl -n craft create secret generic craft-web-gateway \
 #     --from-literal=MCP_KEY=$(openssl rand -hex 24) --from-literal=BASIC_AUTH=me:change-me
-#   kubectl -n craft apply -f craft-gateway.yaml     # after changing craft.example.org below
+#   kubectl -n craft apply -f craft-web-gateway.yaml     # after changing craft.example.org below
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: craft-gateway
+  name: craft-web-gateway
 spec:
   replicas: 1
-  selector: { matchLabels: { app: craft-gateway } }
+  selector: { matchLabels: { app: craft-web-gateway } }
   template:
-    metadata: { labels: { app: craft-gateway } }
+    metadata: { labels: { app: craft-web-gateway } }
     spec:
       containers:
         - name: hub
-          image: hayone/craft-gateway:latest
-          envFrom: [{ secretRef: { name: craft-gateway } }]
+          image: hayone/craft-web-gateway:latest
+          envFrom: [{ secretRef: { name: craft-web-gateway } }]
           env:
             - { name: APPS, value: "photocraft=http://photocraft:8080,vectorcraft=http://vectorcraft:8080" }
             - { name: RELAY_URL, value: "http://craft-mcp:8080" }
@@ -31,9 +31,9 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: { name: craft-gateway }
+metadata: { name: craft-web-gateway }
 spec:
-  selector: { app: craft-gateway }
+  selector: { app: craft-web-gateway }
   ports: [{ port: 8080 }]
 ---
 apiVersion: apps/v1
@@ -50,7 +50,7 @@ spec:
         - name: relay
           image: hayone/craft-mcp:latest
           env:
-            - { name: MCP_KEY, valueFrom: { secretKeyRef: { name: craft-gateway, key: MCP_KEY } } }
+            - { name: MCP_KEY, valueFrom: { secretKeyRef: { name: craft-web-gateway, key: MCP_KEY } } }
             - { name: PUBLIC_HOST, value: "https://craft.example.org/_relay" }
           ports: [{ containerPort: 8080 }]
           readinessProbe: { httpGet: { path: /healthz, port: 8080 } }
@@ -88,7 +88,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: craft-gateway
+  name: craft-web-gateway
   annotations:
     # ingress-nginx: stream chat replies and keep the tab's WebSocket open.
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
@@ -97,11 +97,11 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
 spec:
   ingressClassName: nginx
-  tls: [{ hosts: [craft.example.org], secretName: craft-gateway-tls }]
+  tls: [{ hosts: [craft.example.org], secretName: craft-web-gateway-tls }]
   rules:
     - host: craft.example.org
       http:
         paths:
           - path: /
             pathType: Prefix
-            backend: { service: { name: craft-gateway, port: { number: 8080 } } }
+            backend: { service: { name: craft-web-gateway, port: { number: 8080 } } }
