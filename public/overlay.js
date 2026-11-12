@@ -932,15 +932,114 @@
   let joining = null;
   const tell = (w, o) => w.postMessage({
     type: "craft-hub:session", app, title, state, mcp: A?.session?.mcp ?? null, expires: A?.session?.expires ?? null,
+    files: hub.embedFiles !== false,
   }, o);
   window.addEventListener("message", (e) => {
-    if (window.parent === window || e.source !== window.parent || e.data?.type !== "craft-embed:hello") return;
-    if (!allowed.some((re) => re.test(e.origin))) return;
+    if (window.parent === window || e.source !== window.parent) return;
+    if (e.data?.type === "craft-embed:files-reply") return editor && e.origin === editor.o && answered(e.data);
+    if (e.data?.type !== "craft-embed:hello" || !allowed.some((re) => re.test(e.origin))) return;
     embedders.set(e.source, e.origin);
+    offerFiles(e.source, e.origin, e.data.files);
     if (A && !joining && state !== "on") joining = connected().catch(() => {}).finally(() => { joining = null; });
     tell(e.source, e.origin);
   });
   onState.add(() => { for (const [w, o] of embedders) tell(w, o); });
+
+  // ---- files from the editor that frames this page ------------------------------------------
+  // An embedder whose hello carries `files: {label, name, readOnly}` (craft-vscode) lends its workspace:
+  //  - a place in the app's File › Open and Save dialogs. craft-storage.js (in the app images)
+  //    lists window.craftStoragePlaces next to its cloud folders; paths are cloud:workspace/<path>.
+  //  - files dragged from the editor's explorer onto the app. The drag carries only file URIs; the
+  //    editor reads the files, and the page replays them as an ordinary file drop on the app.
+  // Requests go to that one window on its checked origin, and only its replies are heard. Call ids
+  // are random, so another frame that posts to the editor can't answer in the editor's place.
+  let editor = null; // { w, o }
+  const calls = new Map(); // id -> { resolve, reject, timer }
+  const PLACE = "workspace";
+  const newId = () => crypto.randomUUID?.() ?? Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+  function ask(op, args = {}) {
+    return new Promise((resolve, reject) => {
+      if (!editor) return reject(new Error("The editor isn't connected."));
+      const id = newId();
+      const timer = setTimeout(() => { calls.delete(id); reject(new Error("The editor didn't answer.")); }, 120_000);
+      calls.set(id, { resolve, reject, timer });
+      editor.w.postMessage({ type: "craft-embed:files", id, op, ...args }, editor.o);
+    });
+  }
+  function answered(m) {
+    const call = calls.get(m.id);
+    if (!call) return;
+    calls.delete(m.id);
+    clearTimeout(call.timer);
+    m.ok ? call.resolve(m.value) : call.reject(new Error(String(m.error ?? "The editor refused.")));
+  }
+  function offerFiles(w, o, files) {
+    const places = (window.craftStoragePlaces ?? []).filter((p) => p.id !== PLACE);
+    if (!files || typeof files !== "object" || hub.embedFiles === false) {
+      if (!editor) return;
+      editor = null;
+      window.craftStoragePlaces = places;
+      for (const [id, call] of calls) { clearTimeout(call.timer); call.reject(new Error("The editor stopped sharing its files.")); calls.delete(id); }
+      return;
+    }
+    editor = { w, o };
+    window.craftStoragePlaces = [...places, {
+      id: PLACE, group: String(files.label || "Editor").slice(0, 40), name: String(files.name || "Workspace").slice(0, 80),
+      readOnly: files.readOnly === true,
+      list: (path) => ask("list", { path }),
+      read: (path) => ask("read", { path }),
+      write: (path, bytes) => ask("write", { path, bytes }),
+      mkdir: (path) => ask("mkdir", { path }),
+    }];
+  }
+
+  // Drops from the editor's explorer. A drop of real files (from the desktop) has "Files" and is
+  // left to the app; drops on the assistant window are the assistant's own.
+  // VS Code's own types come first: Chromium turns file: links in text/uri-list into
+  // about:blank#blocked for web content, while code-server's vscode-remote: links pass.
+  const URI_TYPES = ["application/vnd.code.uri-list", "resourceurls", "text/uri-list"];
+  const editorDrag = (e) => {
+    if (!editor || !e.isTrusted || e.composedPath().includes(host)) return false;
+    const types = [...(e.dataTransfer?.types ?? [])].map((t) => t.toLowerCase());
+    return !types.includes("files") && URI_TYPES.some((t) => types.includes(t));
+  };
+  function droppedUris(dt) {
+    const usable = (s) => s && !s.startsWith("#") && !s.startsWith("about:");
+    const lines = (t) => (dt.getData(t) || "").split(/\r?\n/).map((s) => s.trim()).filter(usable);
+    const json = (t) => { try { const v = JSON.parse(dt.getData(t) || "null"); return Array.isArray(v) ? v.map(String).filter(usable) : []; } catch { return []; } };
+    for (const list of [() => lines("application/vnd.code.uri-list"), () => json("ResourceURLs"), () => lines("text/uri-list")]) {
+      const uris = list();
+      if (uris.length) return uris.slice(0, 50);
+    }
+    return [];
+  }
+  window.addEventListener("dragover", (e) => {
+    if (!editorDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, true);
+  window.addEventListener("drop", async (e) => {
+    if (!editorDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const { target, clientX, clientY } = e;
+    const on = target instanceof Element && target.isConnected ? target : document.querySelector("canvas") ?? document.body;
+    const send = (type, dataTransfer = new DataTransfer()) =>
+      on.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, composed: true, clientX, clientY, dataTransfer }));
+    // The app saw the real dragenter and dragover; when nothing gets dropped, end its drag state.
+    const uris = droppedUris(e.dataTransfer);
+    if (!uris.length) return send("dragleave");
+    try {
+      const { files } = await ask("drop", { uris });
+      if (!files?.length) return send("dragleave");
+      const dt = new DataTransfer();
+      for (const f of files) dt.items.add(new File([f.bytes], f.name, { type: f.type || "" }));
+      for (const type of ["dragenter", "dragover", "drop"]) send(type, dt);
+    } catch (err) {
+      send("dragleave");
+      console.warn(`craft-ai-hub: the dropped files didn't arrive: ${err.message}`);
+    }
+  }, true);
 
   const mount = () => { document.body.append(host); renderLog(); layout(); };
   document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", mount) : mount();

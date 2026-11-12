@@ -23,6 +23,7 @@
 //   REQUIRE_SIGN_IN          "true": craft-mcp's OpenID Connect sign-in
 //   PUBLIC_ORIGIN            https://<this host>, when the forwarded headers don't say it
 //   EMBED_ORIGINS            origins that may frame the apps and get the tab's MCP URL (craft-vscode)
+//   EMBED_FILES              "false": framing editors may not lend their workspace files to the apps
 //   PORT                     default 8080
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -62,6 +63,8 @@ for (const name of APPS.keys()) if (!/^[a-z0-9-]+$/.test(name) || name.startsWit
 // vscode-webview://* (a * stands for one or more host labels).
 const EMBED = (process.env.EMBED_ORIGINS ?? "").split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
 for (const o of EMBED) if (!/^[a-z][a-z0-9+.-]*:\/\/[a-z0-9*.-]+(:\d+)?$/i.test(o)) throw new Error(`EMBED_ORIGINS: bad origin ${o}`);
+const EMBED_FILES = (process.env.EMBED_FILES ?? "true").trim().toLowerCase();
+if (!/^(true|false)$/.test(EMBED_FILES)) throw new Error("EMBED_FILES: expected true or false");
 const RELAY = process.env.RELAY_URL ? new URL(process.env.RELAY_URL) : null;
 const SECRET = process.env.MCP_KEY ?? "";
 const SIGN_IN = process.env.REQUIRE_SIGN_IN === "true";
@@ -140,7 +143,7 @@ function injectInto(app) {
     body.on("data", (c) => chunks.push(c));
     body.on("error", () => res.headersSent || res.writeHead(502).end());
     body.on("end", () => {
-      const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled, tokens: TOKENS, providers, embed: EMBED }).replace(/</g, "\\u003c");
+      const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled, tokens: TOKENS, providers, embed: EMBED, embedFiles: EMBED_FILES === "true" }).replace(/</g, "\\u003c");
       const html = Buffer.concat(chunks).toString("utf8")
         .replace(/<head(\s[^>]*)?>/i, (m) => `${m}<script>window.craftHub=${settings}</script>`)
         .replace(/<\/head>/i, '<script src="/_hub/overlay.js" defer></script></head>');
