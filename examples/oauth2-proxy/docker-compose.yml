@@ -1,5 +1,5 @@
 # The full setup with sign-in through your OpenID Connect provider (Google, Microsoft Entra,
-# Keycloak, Authentik, Stalwart, ...): oauth2-proxy in front of craft-ai-hub, the craft apps and
+# Keycloak, Authentik, Stalwart, ...): oauth2-proxy in front of craft-gateway, the craft apps and
 # the craft-mcp relay behind it. Put TLS in front of oauth2-proxy (Caddy, Traefik, a load balancer).
 #
 #   cp .env.example .env   # then fill it in
@@ -34,7 +34,7 @@ services:
     depends_on: [hub]
 
   hub:
-    image: hayone/craft-ai-hub:latest
+    image: hayone/craft-gateway:latest
     restart: unless-stopped
     environment:
       APPS: >-

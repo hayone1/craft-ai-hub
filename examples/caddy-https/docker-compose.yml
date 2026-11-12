@@ -1,4 +1,4 @@
-# craft-ai-hub on your own domain with automatic HTTPS (Caddy and Let's Encrypt) and basic auth.
+# craft-gateway on your own domain with automatic HTTPS (Caddy and Let's Encrypt) and basic auth.
 # Point the domain's DNS at this machine and open ports 80 and 443, then:
 #   cp .env.example .env   # then fill it in
 #   docker compose up -d   # https://<DOMAIN>
@@ -19,7 +19,7 @@ services:
     depends_on: [hub]
 
   hub:
-    image: hayone/craft-ai-hub:latest
+    image: hayone/craft-gateway:latest
     restart: unless-stopped
     environment:
       APPS: >-
