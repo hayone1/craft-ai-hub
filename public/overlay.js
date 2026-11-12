@@ -998,17 +998,23 @@
   // Hand files to the app as an ordinary file drop on its canvas, once the app has drawn one.
   async function openFiles(files) {
     if (!Array.isArray(files) || !files.length) return;
-    let canvas = null;
-    for (let i = 0; i < 120 && !(canvas = document.querySelector("canvas")); i++) await new Promise((r) => setTimeout(r, 250));
-    if (!canvas) return console.warn("craft-web-gateway: no app canvas to open the files in");
-    await new Promise((r) => setTimeout(r, 800));
     const dt = new DataTransfer();
     for (const f of files) if (f?.bytes && f.name) dt.items.add(new File([f.bytes], String(f.name), { type: f.type || "" }));
-    const box = canvas.getBoundingClientRect();
-    const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
-    for (const type of ["dragenter", "dragover", "drop"]) {
-      canvas.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, composed: true, dataTransfer: dt, ...at }));
+    // The page's canvas exists before the app runs. The app's own drop handling accepts a dragover
+    // (preventDefault), so offer one until it is taken, for up to a minute, then drop.
+    for (let i = 0; i < 240; i++) {
+      const canvas = document.querySelector("canvas");
+      if (canvas) {
+        const box = canvas.getBoundingClientRect();
+        const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
+        const send = (type) => canvas.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, composed: true, dataTransfer: dt, ...at }));
+        send("dragenter");
+        if (!send("dragover")) { send("drop"); return; }
+        send("dragleave");
+      }
+      await new Promise((r) => setTimeout(r, 250));
     }
+    console.warn("craft-web-gateway: the app didn't take the files");
   }
 
   // Drops from the editor's explorer. A drop of real files (from the desktop) has "Files" and is
