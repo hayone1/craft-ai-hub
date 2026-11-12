@@ -25,6 +25,10 @@ Works from any browser, an iPad included: the app runs in the tab, Claude runs o
 
 In VS Code (code-server, on an iPad too), [craft-vscode](https://github.com/hayone1/craft-vscode) opens the apps in editor
 panels and lets Claude Code in the workspace drive them; set `EMBED_ORIGINS` to the editor's origin.
+The editor can also lend its workspace to the page. The apps' File › Open and Save dialogs then
+list a "VS Code" place next to the cloud folders, and files dragged from the editor's explorer
+open in the app. The overlay only talks about files with a parent page on an `EMBED_ORIGINS`
+origin, and the editor decides which files the page may use.
 
 ## How it works
 
@@ -122,7 +126,8 @@ applies the permission mode before each call.
 | `BASIC_AUTH` | | `user:password` pairs, comma separated. |
 | `REQUIRE_SIGN_IN` | `false` | `true` signs people in through craft-mcp's own OpenID Connect client (its `AUTH_*` settings). |
 | `PUBLIC_ORIGIN` | from the request | `https://<host>`, used for the sign-in callback. |
-| `EMBED_ORIGINS` | | Origins that may frame the apps and get the tab's MCP URL, comma separated; `*` stands for host labels: `https://*.code.example.com`. For [craft-vscode](https://github.com/hayone1/craft-vscode) in code-server. |
+| `EMBED_ORIGINS` | | Origins that may frame the apps and get the tab's MCP URL, comma separated; `*` stands for host labels: `https://*.code.example.com`. For [craft-vscode](https://github.com/hayone1/craft-vscode) in code-server. The same origins may lend their workspace files to the page. |
+| `EMBED_FILES` | `true` | `false` turns off the editor's workspace place in the file dialogs and the drops from the editor's explorer, and asks craft-vscode to stop passing file requests. It is a switch for the feature, not a security boundary: the editor's own setting (`craft.workspaceFiles`) decides what a page may reach. The MCP handshake still works. |
 | `PORT` | `8080` | |
 
 ### Sign-in
