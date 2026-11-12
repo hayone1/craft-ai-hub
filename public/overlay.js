@@ -951,6 +951,8 @@
   // An embedder whose hello carries `files: {label, name, readOnly}` (craft-vscode) lends its workspace:
   //  - a place in the app's File › Open and Save dialogs. craft-storage.js (in the app images)
   //    lists window.craftStoragePlaces next to its cloud folders; paths are cloud:workspace/<path>.
+  //  - files the AI assistant opens and saves by path (craft-storage.js asks the place to locate
+  //    the path; craft-vscode 0.3.3+ answers).
   //  - files dragged from the editor's explorer onto the app. The drag carries only file URIs; the
   //    editor reads the files, and the page replays them as an ordinary file drop on the app.
   // Requests go to that one window on its checked origin, and only its replies are heard. Call ids
@@ -992,6 +994,8 @@
       read: (path) => ask("read", { path }),
       write: (path, bytes) => ask("write", { path, bytes }),
       mkdir: (path) => ask("mkdir", { path }),
+      // An AI assistant's file system path (/home/coder/project/cat.png) to this place's path.
+      locate: (path) => ask("place", { path }),
     }];
   }
 
