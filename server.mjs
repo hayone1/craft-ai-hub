@@ -217,7 +217,7 @@ const launcher = () => `<!doctype html>
     <a class="card" href="/${esc(a.name)}/"><span class="icon" style="background:hsl(${(i * 47 + 200) % 360} 55% 42%)">${esc(a.title[0])}</span>
       <span><div class="name">${esc(a.title)}</div><div class="desc">${esc(a.description)}</div></span></a>`).join("")}
   </div>
-  ${RELAY ? `<p class="note"><span class="spark">✦</span> Inside an app, the Ask AI button opens the assistant${chatEnabled ? "" : " (connect AI apps over MCP; in-app chat is off)"}.</p>` : ""}
+  ${RELAY ? `<p class="note"><span class="spark">✦</span> Inside an app, the round ✦ button opens the assistant${chatEnabled ? "" : " (connect AI apps over MCP; in-app chat is off)"}.</p>` : ""}
 </main></body></html>`;
 
 // ---- server -----------------------------------------------------------------------------------
