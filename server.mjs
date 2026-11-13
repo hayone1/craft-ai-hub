@@ -1,6 +1,7 @@
 // craft-web-gateway: one front door for the craft web apps. It lists them, proxies each one under
-// /<app>/, and injects an AI assistant overlay (public/overlay.js) into their pages. The overlay's
-// chat runs here on Claude Code or OpenAI Codex and drives the app over MCP through the craft-mcp relay.
+// /<app>/ (or at the root of the app's own host, APP_HOST), and injects an AI assistant overlay
+// (public/overlay.js) and cloud storage (public/cloud.js) into their pages. The overlay's chat runs
+// here on Claude Code or OpenAI Codex and drives the app over MCP through the craft-mcp relay.
 //
 //   /                          launcher
 //   /<app>/...                 the app (APPS), with the overlay injected into its HTML
@@ -8,11 +9,14 @@
 //   /<app>/_storage/...        cloud storage (craft-mcp /storage/<app>/...)
 //   /_storage/...              sign-in and its callback, for every app
 //   /_relay/...                craft-mcp itself: the tab's WebSocket and the MCP endpoints
-//   /_hub/overlay.js, /_hub/chat, /_hub/token, /_hub/codex
+//   /_hub/overlay.js, /_hub/cloud.js, /_hub/chat, /_hub/token, /_hub/codex
 //   /_hub/mcp/<gate>           Codex's way to the relay, past the permission prompts (loopback only)
+// On an app's own host (APP_HOST), the app's paths start at / instead of /<app>/; /_hub/ and
+// /_relay/ stay the same.
 //
 // Environment (see README.md):
 //   APPS                     photocraft=http://photocraft:8080,vectorcraft=http://localhost:8082,...
+//   APP_HOST                 https://{app}.example.org: each app also at the root of its own host
 //   RELAY_URL, MCP_KEY       craft-mcp's internal URL and its MCP_KEY (optional: no assistant)
 //   CLAUDE_CODE_OAUTH_TOKEN  a shared token from `claude setup-token` (CHAT_MODEL, CHAT_EFFORT optional)
 //   CHAT_TOKENS              personal | shared | both | off: whose Claude account chats run on
@@ -68,8 +72,24 @@ const USERS = (process.env.BASIC_AUTH ?? "").split(",").map((s) => s.trim()).fil
   if (pair.indexOf(":") < 1) throw new Error("BASIC_AUTH: expected user:password pairs");
   return Buffer.from(pair);
 });
-const origin = (req) => process.env.PUBLIC_ORIGIN?.replace(/\/$/, "")
-  || `${String(req.headers["x-forwarded-proto"] ?? "http").split(",")[0]}://${String(req.headers["x-forwarded-host"] ?? req.headers.host).split(",")[0]}`;
+// APP_HOST: https://{app}.example.org serves each app at the root of its own host too. A request
+// is for that host when its Host (or X-Forwarded-Host, from the proxy in front) matches.
+const APP_HOST = process.env.APP_HOST ? new URL(process.env.APP_HOST.replace("{app}", "app-name-here")) : null;
+if (APP_HOST && !process.env.APP_HOST.includes("{app}")) throw new Error("APP_HOST: put {app} where the app's name goes, e.g. https://{app}.example.org");
+const requestHost = (req) => String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "").split(",")[0].trim().toLowerCase();
+const hostApp = (req) => {
+  if (!APP_HOST) return null;
+  const [before, after] = APP_HOST.host.split("app-name-here");
+  const host = requestHost(req);
+  if (!host.startsWith(before) || !host.endsWith(after)) return null;
+  return APPS.get(host.slice(before.length, host.length - after.length)) ?? null;
+};
+const origin = (req) => {
+  const own = hostApp(req);
+  if (own) return process.env.APP_HOST.replace("{app}", own.name).replace(/\/$/, "");
+  return process.env.PUBLIC_ORIGIN?.replace(/\/$/, "")
+    || `${String(req.headers["x-forwarded-proto"] ?? "http").split(",")[0]}://${requestHost(req)}`;
+};
 // Chat runs on a Claude subscription token: each person's own (kept encrypted in an HttpOnly cookie
 // on /_hub, so neither the apps' scripts nor the server's disk hold it), the hub's shared one, or
 // either (the person's own first).
@@ -88,6 +108,7 @@ const tokenCookie = (req, value, maxAge) => hubCookie(req, TOKEN_COOKIE, value, 
 const YEAR = 365 * 86400;
 
 const OVERLAY = readFileSync(new URL("./public/overlay.js", import.meta.url));
+const CLOUD = readFileSync(new URL("./public/cloud.js", import.meta.url));
 
 // A relay key (<expiry>.<nonce>.<signature>, signed with MCP_KEY by craft-mcp) that is still valid:
 // chat only runs for a tab that holds one.
@@ -141,7 +162,7 @@ function injectInto(app) {
       const settings = JSON.stringify({ app: app.name, title: app.title, chat: chatEnabled, tokens: TOKENS, providers }).replace(/</g, "\\u003c");
       const html = Buffer.concat(chunks).toString("utf8")
         .replace(/<head(\s[^>]*)?>/i, (m) => `${m}<script>window.craftHub=${settings}</script>`)
-        .replace(/<\/head>/i, '<script src="/_hub/overlay.js" defer></script></head>');
+        .replace(/<\/head>/i, '<script src="/_hub/cloud.js" defer></script><script src="/_hub/overlay.js" defer></script></head>');
       const h = { ...r.headers, "content-length": Buffer.byteLength(html) };
       for (const k of [...HOP, "content-encoding", "etag"]) delete h[k];
       res.writeHead(r.statusCode, h).end(html);
@@ -234,8 +255,8 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url, "http://hub");
     const path = url.pathname;
     if (path === "/healthz") return res.end("ok");
-    if (path === "/_hub/overlay.js") {
-      return res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" }).end(OVERLAY);
+    if (path === "/_hub/overlay.js" || path === "/_hub/cloud.js") {
+      return res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" }).end(path === "/_hub/cloud.js" ? CLOUD : OVERLAY);
     }
     // Codex's MCP connection: only from this machine, by a gate id that lives for one reply.
     if (path.startsWith("/_hub/mcp/")) {
@@ -247,9 +268,10 @@ const server = createServer(async (req, res) => {
       return forward(req, res, relayUrl(path.slice("/_relay".length), url.search));
     }
     if (!basicOk(req)) return askBasic(res);
+    const own = hostApp(req);
     if (path.startsWith("/_storage/")) {
       if (!RELAY) return res.writeHead(404).end();
-      return storage(req, res, [...APPS.keys()][0], path.slice("/_storage/".length), url.search);
+      return storage(req, res, own?.name ?? [...APPS.keys()][0], path.slice("/_storage/".length), url.search);
     }
     if (path === "/_hub/token") {
       if (!(await isSignedIn(req))) return json(res, 401, { error: "Sign in first." });
@@ -309,16 +331,21 @@ const server = createServer(async (req, res) => {
       }
       return handleChat(res, body, { app: app.name, title: app.title, description: app.description, key: m[1], mcpUrl, provider, auth });
     }
-    if (path === "/") {
+    if (path === "/" && !own) {
       if (!(await isSignedIn(req))) return signInPage(res);
       return res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" }).end(launcher());
     }
 
-    const [, name, ...rest] = path.split("/");
-    const app = APPS.get(name);
-    if (!app) return res.writeHead(404, { "content-type": "text/plain" }).end("No such app.");
-    if (!rest.length) return res.writeHead(301, { location: `/${name}/${url.search}` }).end();
-    const sub = `/${rest.join("/")}`;
+    let app = own;
+    let sub = path;
+    if (!own) {
+      const [, name, ...rest] = path.split("/");
+      app = APPS.get(name);
+      if (!app) return res.writeHead(404, { "content-type": "text/plain" }).end("No such app.");
+      if (!rest.length) return res.writeHead(301, { location: `/${name}/${url.search}` }).end();
+      sub = `/${rest.join("/")}`;
+    }
+    const name = app.name;
 
     if (sub.startsWith("/_storage/")) {
       if (!RELAY) return res.writeHead(404).end();
@@ -344,9 +371,13 @@ server.on("upgrade", (req, socket, head) => {
   let target;
   if (url.pathname.startsWith("/_relay/") && RELAY) target = relayUrl(url.pathname.slice("/_relay".length), url.search);
   else if (basicOk(req)) {
-    const [, name, ...rest] = url.pathname.split("/");
-    const app = APPS.get(name);
-    if (app && rest.length) target = new URL(`/${rest.join("/")}${url.search}`, app.upstream);
+    const own = hostApp(req);
+    if (own) target = new URL(`${url.pathname}${url.search}`, own.upstream);
+    else {
+      const [, name, ...rest] = url.pathname.split("/");
+      const app = APPS.get(name);
+      if (app && rest.length) target = new URL(`/${rest.join("/")}${url.search}`, app.upstream);
+    }
   }
   if (!target) return socket.destroy();
   const headers = { ...req.headers, host: target.host };
