@@ -4,8 +4,9 @@
 // drives the app over MCP through the craft-mcp relay. The "Connect" tab hands the same connection to an external
 // MCP client.
 //
-// The connection itself belongs to the app page (craft-remote.js in the remote images), which
-// exposes it as window.craftAssistant. Apps without it get the launcher link and a notice.
+// The relay client belongs to the app page (craft-remote.js in the remote images), which exposes
+// it as window.craftAssistant; the overlay makes the connection here (_assistant/session) and hands
+// it over. Apps without it get the launcher link and a notice.
 (() => {
   const hub = window.craftHub;
   const app = hub.app;
@@ -26,10 +27,18 @@
     setState(A.state);
     return true;
   };
+  // A new relay connection for this tab from the hub (craft-mcp /mint), kept for the next visit.
+  async function connect(hours) {
+    // Remote images from before November 14, 2026 make the connection themselves.
+    if (typeof A.connect === "function") return A.connect(hours);
+    const r = await fetch(`_assistant/session?app=${encodeURIComponent(app)}&hours=${encodeURIComponent(hours)}`, { method: "POST", credentials: "same-origin" });
+    if (!r.ok) throw new Error(`the server answered ${r.status}`);
+    A.use(await r.json(), { keep: true });
+  }
   // Resolves once the tab is connected to the relay (creating a connection if there is none).
   async function connected() {
     if (!A) throw new Error(`${title} in this hub has no assistant support (it needs the remote image)`);
-    if (!A.session) await A.connect(168);
+    if (!A.session) await connect(168);
     if (state === "replaced") A.reconnect();
     if (state === "on") return;
     await new Promise((resolve, reject) => {
@@ -870,7 +879,7 @@
         ${error ? `<div class="err" style="margin-top:8px">${esc(error)}</div>` : ""}`;
       connectView.querySelector(".primary").onclick = async () => {
         error = "";
-        try { await A.connect(connectView.querySelector("select").value); } catch (e) { error = `Couldn't create a connection: ${e.message}`; }
+        try { await connect(connectView.querySelector("select").value); } catch (e) { error = `Couldn't create a connection: ${e.message}`; }
         renderConnect();
       };
       return;

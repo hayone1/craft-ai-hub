@@ -131,6 +131,7 @@ applies the permission mode before each call.
 | Variable | Default | |
 | --- | --- | --- |
 | `APPS` | (required) | `name=url` pairs: `photocraft=http://photocraft:8080,vectorcraft=http://localhost:8082`. Order is the launcher's. |
+| `APP_HOST` | | `https://{app}.example.org`: each app is also served at the root of its own host, for example `https://photocraft.example.org/`. The proxy in front must pass the original host (`Host` or `X-Forwarded-Host`). |
 | `RELAY_URL` | | craft-mcp's internal URL. Without it there is no assistant. |
 | `MCP_KEY` | | The same value craft-mcp has. craft-mcp's `PUBLIC_HOST` must be `<hub origin>/_relay`. |
 | `CHAT_TOKENS` | `personal`, or `both` with a shared token | Whose Claude account chats use (see above). |
@@ -144,7 +145,7 @@ applies the permission mode before each call.
 | `DATA_DIR` | `/data` in the image | ChatGPT sign-ins (encrypted) and Codex sessions. |
 | `BASIC_AUTH` | | `user:password` pairs, comma separated. |
 | `REQUIRE_SIGN_IN` | `false` | `true` signs people in through craft-mcp's own OpenID Connect client (its `AUTH_*` settings). |
-| `PUBLIC_ORIGIN` | from the request | `https://<host>`, used for the sign-in callback. |
+| `PUBLIC_ORIGIN` | from the request | `https://<host>`, used for the sign-in callback. An app's own host (`APP_HOST`) uses its own origin instead. |
 | `PORT` | `8080` | |
 
 ### Sign-in
@@ -169,11 +170,24 @@ chat on the hub uses that one plan.
 | `/<app>/…` | The app, with the overlay injected into its pages |
 | `/<app>/_assistant/session` | Mints the tab's relay key (craft-mcp `/mint`) |
 | `/<app>/_storage/…`, `/_storage/…` | craft-mcp cloud storage and its sign-in |
+| `/_hub/cloud.js` | Cloud storage in the apps' File › Open and Save (see below) |
 | `/_relay/…` | craft-mcp: the tab's WebSocket, `/<key>/<app>/mcp` |
 | `/_hub/overlay.js`, `/_hub/chat`, `/_hub/chat/permission`, `/_hub/token` | The overlay, its chat and permission answers, and the person's own Claude token |
 | `/_hub/codex`, `/_hub/codex/login` | The person's ChatGPT sign-in (device code or `auth.json`) |
 | `/_hub/mcp/<gate>` | Codex's MCP connection to the tab, from the hub itself only |
 | `/healthz` | Health check |
+
+On an app's own host (`APP_HOST`), the app's paths start at `/` instead of `/<app>/`: the app at
+`/`, `/_assistant/session` and `/_storage/…`. The `/_hub/` and `/_relay/` paths stay the same.
+
+### Cloud storage and the assistant connection
+
+The gateway adds both to the app pages; the app images carry neither. `cloud.js` lends craft-mcp's
+cloud folders to the app as storage places (`window.craftStoragePlaces`), which the File › Open
+and Save dialogs of the remote images list. Before sign-in, the list shows one place that signs in
+when opened. The overlay makes the tab's relay connection (`_assistant/session`) and hands it to
+the app's relay client (`window.craftAssistant.use`). Remote images from before November 14, 2026
+did both themselves, and they still work with this gateway.
 
 ## Develop
 
